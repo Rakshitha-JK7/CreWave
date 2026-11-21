@@ -10,6 +10,9 @@ router.post('/', authenticateToken, requireRole('health_worker', 'admin'), consu
 // List all consultations for health worker / clinic / patient
 router.get('/', authenticateToken, consultationsController.list);
 
+// List available approved doctors for consultation routing
+router.get('/doctors', authenticateToken, consultationsController.getDoctors);
+
 // Get consultation details
 router.get('/:id', authenticateToken, consultationsController.getById);
 

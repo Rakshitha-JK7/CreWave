@@ -4,6 +4,7 @@ import {
   ShieldCheck,
   Users,
   CheckCircle,
+  CheckCircle2,
   XCircle,
   Clock,
   Activity,
@@ -177,7 +178,7 @@ export default function AdminDashboard() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ textAlign: 'right', display: 'none', md: 'block' }}>
+          <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1e293b' }}>
               {currentUser?.name || 'Administrator'}
             </div>

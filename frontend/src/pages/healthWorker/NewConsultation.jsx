@@ -5,11 +5,12 @@ import {
   CheckCircle, AlertTriangle, AlertCircle, XCircle, Info, X,
   Upload, Image as ImageIcon, File, Clock, Tag, Plus, Eye,
   Save, Send, ArrowLeft, Zap, Thermometer, Heart, Wind, Droplets,
-  CheckSquare, Square, Bell, Loader2
+  CheckSquare, Square, Bell, Loader2, Stethoscope
 } from 'lucide-react'
 import DashboardLayout from '../../layouts/DashboardLayout'
 import { useApp } from '../../context/AppContext'
 import patientService from '../../services/patientService'
+import consultationService from '../../services/consultationService'
 import { validateConsultation } from '../../utils/validation'
 import { enqueueConsultation } from '../../offline/offlineQueue'
 import { saveConsultation, getDraftConsultations, deleteDraft } from '../../offline/indexedDB'
@@ -372,6 +373,16 @@ function PreviewModal({ formData, selectedPatient, onClose, onSubmit, isSubmitti
                 {urgency.label}
               </span>
             </div>
+            <div style={styles.previewRow}>
+              <span style={styles.previewLabel}>Specialization</span>
+              <span style={styles.previewValue}>{formData.specialization || 'General Medicine'}</span>
+            </div>
+            {formData.doctorName && (
+              <div style={styles.previewRow}>
+                <span style={styles.previewLabel}>Assigned Doctor</span>
+                <span style={{ ...styles.previewValue, color: '#0284c7', fontWeight: 600 }}>{formData.doctorName}</span>
+              </div>
+            )}
           </div>
         </div>
         <div style={styles.modalFooter}>
@@ -398,6 +409,9 @@ export default function NewConsultation() {
 
   const [formData, setFormData] = useState({
     patientId: '',
+    specialization: 'General Medicine',
+    doctorId: '',
+    doctorName: '',
     symptoms: {
       chiefComplaint: '',
       description: '',
@@ -427,6 +441,7 @@ export default function NewConsultation() {
   })
 
   const [selectedPatient, setSelectedPatient] = useState(null)
+  const [availableDoctors, setAvailableDoctors] = useState([])
   const [errors, setErrors] = useState({})
   const [isDraftSaved, setIsDraftSaved] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -438,6 +453,18 @@ export default function NewConsultation() {
   const [attachmentError, setAttachmentError] = useState('')
   const [draftBanner, setDraftBanner] = useState(null) // { id, data }
   const [patients, setPatients] = useState([])
+
+  useEffect(() => {
+    async function loadDoctors() {
+      try {
+        const docs = await consultationService.getDoctors()
+        setAvailableDoctors(docs || [])
+      } catch (e) {
+        console.warn('Could not load doctors:', e)
+      }
+    }
+    loadDoctors()
+  }, [])
 
   const selectPatient = useCallback((patient) => {
     setSelectedPatient(patient)
@@ -635,18 +662,25 @@ export default function NewConsultation() {
     if (!consultationIdRef.current) {
       consultationIdRef.current = generateId()
     }
+    const consultationId = consultationIdRef.current
     try {
-      await saveConsultation({
-        id: consultationIdRef.current,
+      const draftRecord = {
+        id: consultationId,
+        consultationId,
+        idempotencyKey: `IDEMP-${consultationId}`,
         ...formData,
         isDraft: true,
+        status: 'draft',
         savedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
         patientName: selectedPatient
           ? (selectedPatient.name || `${selectedPatient.firstName} ${selectedPatient.lastName}`)
-          : '',
-      })
+          : (formData.patientName || 'Patient Draft'),
+        mainComplaint: formData.symptoms?.chiefComplaint || 'Draft Consultation',
+      }
+      await saveConsultation(draftRecord)
       setIsDraftSaved(true)
-      showToast('Draft saved locally', 'success')
+      showToast('Draft consultation saved locally and added to history', 'success')
     } catch {
       showToast('Could not save draft', 'error')
     }
@@ -660,6 +694,9 @@ export default function NewConsultation() {
     consultationIdRef.current = draft.id
     setFormData({
       patientId: draft.patientId || '',
+      specialization: draft.specialization || 'General Medicine',
+      doctorId: draft.doctorId || '',
+      doctorName: draft.doctorName || '',
       symptoms: draft.symptoms || formData.symptoms,
       medicalHistory: draft.medicalHistory || formData.medicalHistory,
       vitals: draft.vitals || formData.vitals,
@@ -700,20 +737,61 @@ export default function NewConsultation() {
     setSubmitStatus('saving')
 
     try {
+      const selectedDoc = availableDoctors.find(d => d.id === formData.doctorId)
+      const docName = selectedDoc ? selectedDoc.name : (formData.doctorName || null)
+
       const consultationRecord = {
         id: consultationId,
-        ...formData,
-        isDraft: false,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
+        consultationId,
+        idempotencyKey: `IDEMP-${consultationId}`,
+        patientId: formData.patientId,
         patientName: selectedPatient
           ? (selectedPatient.name || `${selectedPatient.firstName} ${selectedPatient.lastName}`)
           : '',
-        attachments: formData.attachments.map(({ file, ...rest }) => rest), // Don't serialize File objects
+        priority: formData.urgency === 'urgent' ? 'urgent' : (formData.urgency === 'high' ? 'urgent' : 'normal'),
+        urgency: formData.urgency || 'normal',
+        specialization: formData.specialization || 'General Medicine',
+        doctorId: formData.doctorId || null,
+        doctorName: docName,
+        mainComplaint: formData.symptoms?.chiefComplaint || 'Clinical Consultation',
+        symptoms: formData.symptoms?.chiefComplaint || '',
+        symptomOnset: formData.symptoms?.onset || '',
+        symptomDuration: formData.symptoms?.duration || '',
+        clinicalSummary: {
+          mainComplaint: formData.symptoms?.chiefComplaint,
+          symptoms: formData.symptoms?.chiefComplaint,
+          onset: formData.symptoms?.onset,
+          duration: formData.symptoms?.duration,
+          medicalHistory: Array.isArray(formData.medicalHistory?.existingConditions)
+            ? formData.medicalHistory.existingConditions.join(', ')
+            : '',
+          allergies: Array.isArray(formData.medicalHistory?.knownAllergies)
+            ? formData.medicalHistory.knownAllergies.join(', ')
+            : '',
+          medications: Array.isArray(formData.medicalHistory?.currentMedications)
+            ? formData.medicalHistory.currentMedications.join(', ')
+            : '',
+          healthWorkerObservations: formData.clinicalNotes || formData.healthWorkerNotes,
+        },
+        vitals: formData.vitals,
+        isDraft: false,
+        status: 'available_to_doctor',
+        createdAt: new Date().toISOString(),
+        attachments: (formData.attachments || []).map(({ file, ...rest }) => rest),
       }
 
-      await saveConsultation(consultationRecord)
-      await enqueueConsultation(consultationId, { attachments: formData.attachments })
+      // Always save to IndexedDB and post to /api/consultations
+      await consultationService.createConsultation(consultationRecord)
+
+      // Queue file attachments for upload if any
+      if (formData.attachments && formData.attachments.length > 0) {
+        await enqueueConsultation(consultationId, { attachments: formData.attachments })
+      }
+
+      // Discard any existing draft record from storage
+      try {
+        await deleteDraft(consultationId)
+      } catch (e) { /* ignore */ }
 
       setSubmitStatus('queued')
 
@@ -721,24 +799,25 @@ export default function NewConsultation() {
         addNotification({
           id: 'notif_' + Date.now(),
           type: 'consultation_queued',
-          title: 'Consultation Queued',
-          message: `Consultation for ${consultationRecord.patientName || 'patient'} saved and queued for upload.`,
+          title: 'Consultation Submitted',
+          message: `Consultation for ${consultationRecord.patientName || 'patient'} submitted to ${consultationRecord.specialization} queue.`,
           time: new Date().toISOString(),
           read: false,
         })
       }
 
       showToast(
-        'Consultation saved locally and queued for upload. It will be sent to the doctor when connection is available.',
+        'Consultation submitted successfully and transmitted to doctor queue!',
         'success'
       )
 
       setShowPreview(false)
-      setTimeout(() => navigate('/health-worker/pending-uploads'), 2000)
+      setTimeout(() => navigate('/health-worker/consultations'), 1200)
     } catch (err) {
+      console.error('Submission error:', err)
       setSubmitStatus('failed')
       setIsSubmitting(false)
-      showToast('Failed to save consultation. Please try again.', 'error')
+      showToast(err.message || 'Failed to submit consultation. Saved locally for retry.', 'error')
     }
   }
 
@@ -1270,6 +1349,68 @@ export default function NewConsultation() {
                 <div style={styles.urgencyNote}>
                   <Info size={12} color="#94a3b8" />
                   <span>Urgency is set by the healthcare worker based on clinical judgment and protocol. CareWave does not automatically determine urgency.</span>
+                </div>
+
+                {/* Doctor & Specialization Routing */}
+                <div style={{ marginTop: 24, padding: 18, background: '#f8fafc', borderRadius: 12, border: '1px solid #cbd5e1' }}>
+                  <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Stethoscope size={18} color="#0284c7" /> Doctor & Medical Specialization Routing
+                  </h4>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                        Clinical Specialization Required
+                      </label>
+                      <select
+                        value={formData.specialization || 'General Medicine'}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, specialization: e.target.value }))}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 14, background: '#fff' }}
+                      >
+                        <option value="General Medicine">General Medicine</option>
+                        <option value="Cardiology">Cardiology</option>
+                        <option value="Pediatrics">Pediatrics</option>
+                        <option value="Pulmonology">Pulmonology</option>
+                        <option value="Dermatology">Dermatology</option>
+                        <option value="Orthopedics">Orthopedics</option>
+                        <option value="Gynecology & Obstetrics">Gynecology & Obstetrics</option>
+                        <option value="Neurology">Neurology</option>
+                        <option value="Emergency Care">Emergency Care</option>
+                      </select>
+                      <span style={{ fontSize: 11, color: '#64748b', marginTop: 4, display: 'block' }}>
+                        Directs case to specialists in this discipline
+                      </span>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                        Consulting Tele-Specialist Doctor
+                      </label>
+                      <select
+                        value={formData.doctorId || ''}
+                        onChange={(e) => {
+                          const docId = e.target.value;
+                          const doc = availableDoctors.find((d) => d.id === docId);
+                          setFormData((prev) => ({
+                            ...prev,
+                            doctorId: docId,
+                            doctorName: doc ? doc.name : '',
+                          }));
+                        }}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 14, background: '#fff' }}
+                      >
+                        <option value="">⚡ Any Available Tele-Specialist (Fastest Response)</option>
+                        {availableDoctors.map((doc) => (
+                          <option key={doc.id} value={doc.id}>
+                            {doc.name} — {doc.specialization || 'Specialist'}
+                          </option>
+                        ))}
+                      </select>
+                      <span style={{ fontSize: 11, color: '#64748b', marginTop: 4, display: 'block' }}>
+                        Optionally assign to a specific verified doctor
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

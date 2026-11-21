@@ -86,6 +86,19 @@ class ConsultationsController {
     }
   }
 
+  async getDoctors(req, res, next) {
+    try {
+      const doctors = await consultationService.getDoctors();
+      res.status(200).json({
+        success: true,
+        count: doctors.length,
+        data: doctors,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getDoctorQueue(req, res, next) {
     try {
       const { status, priority, clinicId, limit, offset } = req.query;

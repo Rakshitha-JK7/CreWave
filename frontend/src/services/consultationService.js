@@ -9,6 +9,27 @@ import { enqueueConsultation, getTransferStatus } from '../offline/offlineQueue'
 
 export const consultationService = {
   /**
+   * List available approved doctors for consultation routing
+   */
+  async getDoctors() {
+    try {
+      const response = await api.get('/consultations/doctors');
+      return response.data?.data || response.data || [];
+    } catch (err) {
+      console.warn('Could not fetch doctor list from server:', err);
+      return [
+        {
+          id: 'DOC-DEMO-01',
+          name: 'Dr. Ramesh Sharma (Tele-Specialist)',
+          specialization: 'Cardiology & General Medicine',
+          licenseNumber: 'MED-REG-44921',
+          status: 'active',
+        },
+      ];
+    }
+  },
+
+  /**
    * Submit or locally save a consultation
    */
   async createConsultation(consultationData) {
@@ -58,33 +79,42 @@ export const consultationService = {
    * List all consultations accessible to user role
    */
   async getConsultations(params = {}) {
+    let serverList = [];
     try {
       const response = await api.get('/consultations', { params });
-      return Array.isArray(response.data) ? response.data : (response.data?.data || []);
+      serverList = Array.isArray(response.data) ? response.data : (response.data?.data || []);
     } catch (err) {
-      // Local & mock fallback
-      const local = await dbGetAllConsultations();
-      const combined = [...mockConsultations];
-
-      (local || []).forEach((c) => {
-        const idx = combined.findIndex((item) => item.id === c.id);
-        if (idx !== -1) {
-          combined[idx] = c;
-        } else {
-          combined.unshift(c);
-        }
-      });
-
-      // Filter by params if provided
-      if (params.status && params.status !== 'all') {
-        return combined.filter((c) => c.status === params.status);
-      }
-      if (params.patientId) {
-        return combined.filter((c) => c.patientId === params.patientId);
-      }
-
-      return combined;
+      console.warn('API consultation list error or offline:', err.message);
     }
+
+    // Always fetch local and drafted consultations from client IndexedDB
+    let localList = [];
+    try {
+      localList = await dbGetAllConsultations();
+    } catch (e) {
+      console.warn('Could not read local consultations from IndexedDB:', e);
+    }
+
+    // Merge server consultations and local offline/draft consultations
+    const combined = [...serverList];
+    (localList || []).forEach((c) => {
+      const idx = combined.findIndex((item) => item.id === c.id);
+      if (idx !== -1) {
+        combined[idx] = { ...combined[idx], ...c };
+      } else {
+        combined.unshift(c);
+      }
+    });
+
+    // Filter by params if provided
+    if (params.status && params.status !== 'all') {
+      return combined.filter((c) => c.status === params.status);
+    }
+    if (params.patientId) {
+      return combined.filter((c) => c.patientId === params.patientId || c.patientReferenceId === params.patientId);
+    }
+
+    return combined;
   },
 
   /**

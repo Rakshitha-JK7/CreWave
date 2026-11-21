@@ -19,9 +19,9 @@ const roleColors = {
 };
 
 export default function Navbar({ title, isMobile, onMenuToggle }) {
-  const { currentUser: user } = useAuth();
-  const role = user?.role;
-  const roleCfg = roleColors[role] || { bg: '#f1f5f9', color: '#475569' };
+  const { currentUser } = useAuth();
+  const currentRole = currentUser?.role;
+  const roleCfg = (currentRole && roleColors[currentRole]) || { bg: '#f1f5f9', color: '#475569' };
 
   return (
     <header
@@ -81,12 +81,12 @@ export default function Navbar({ title, isMobile, onMenuToggle }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
         <NetworkStatus />
 
-        {user && (
+        {currentUser && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>
-              {user.name || user.username || 'User'}
+              {currentUser.name || currentUser.username || 'User'}
             </span>
-            {role && (
+            {currentRole && (
               <span
                 style={{
                   ...roleCfg,
@@ -96,7 +96,7 @@ export default function Navbar({ title, isMobile, onMenuToggle }) {
                   fontWeight: 700,
                 }}
               >
-                {roleLabels[role] || role}
+                {roleLabels[currentRole] || currentRole}
               </span>
             )}
           </div>

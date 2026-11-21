@@ -33,13 +33,16 @@ export default function ConsultationHistory() {
   }, []);
 
   const filtered = consultations.filter((c) => {
+    const q = searchQuery.toLowerCase();
+    const complaint = c.mainComplaint || c.clinicalSummary?.mainComplaint || (typeof c.symptoms === 'object' ? c.symptoms?.chiefComplaint : c.symptoms) || '';
     const matchesSearch =
-      c.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.patientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.symptoms?.chiefComplaint?.toLowerCase().includes(searchQuery.toLowerCase());
+      c.id?.toLowerCase().includes(q) ||
+      c.patientName?.toLowerCase().includes(q) ||
+      c.patientId?.toLowerCase().includes(q) ||
+      complaint.toLowerCase().includes(q);
 
-    const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
-    const matchesUrgency = urgencyFilter === 'all' || c.urgency === urgencyFilter;
+    const matchesStatus = statusFilter === 'all' || c.status === statusFilter || (statusFilter === 'draft' && c.isDraft);
+    const matchesUrgency = urgencyFilter === 'all' || c.urgency === urgencyFilter || c.priority === urgencyFilter;
 
     return matchesSearch && matchesStatus && matchesUrgency;
   });
@@ -146,26 +149,45 @@ export default function ConsultationHistory() {
                         <div style={{ fontSize: 12, color: '#64748b' }}>{c.patientId}</div>
                       </td>
                       <td style={{ maxWidth: 220, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {c.symptoms?.chiefComplaint || 'No description'}
+                        {c.mainComplaint || c.clinicalSummary?.mainComplaint || (typeof c.symptoms === 'object' ? c.symptoms?.chiefComplaint : c.symptoms) || 'General Consultation'}
+                        {c.specialization && (
+                          <div style={{ fontSize: 11, color: '#0284c7', fontWeight: 600 }}>Spec: {c.specialization}</div>
+                        )}
                       </td>
                       <td style={{ fontSize: 13, color: '#64748b' }}>
                         {formatDateTime(c.createdAt)}
                       </td>
                       <td>
-                        <StatusBadge status={c.urgency} type="urgency" />
+                        <StatusBadge status={c.urgency || c.priority} type="urgency" />
                       </td>
                       <td>
-                        <StatusBadge status={c.status} type="consultation" />
+                        {c.isDraft ? (
+                          <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: '#fef3c7', color: '#b45309' }}>
+                            Draft (Saved Locally)
+                          </span>
+                        ) : (
+                          <StatusBadge status={c.status} type="consultation" />
+                        )}
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => setSelectedConsultation(c)}
-                            title="View Case Summary"
-                          >
-                            <Eye size={14} /> View
-                          </button>
+                          {c.isDraft ? (
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={() => navigate('/health-worker/new-consultation', { state: { draftId: c.id } })}
+                              title="Resume Draft"
+                            >
+                              Resume
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setSelectedConsultation(c)}
+                              title="View Case Summary"
+                            >
+                              <Eye size={14} /> View
+                            </button>
+                          )}
                           {(c.status === 'response_available' || c.status === 'completed') && (
                             <button
                               className="btn btn-success btn-sm"

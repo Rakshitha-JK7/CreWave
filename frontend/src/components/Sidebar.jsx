@@ -9,7 +9,6 @@ import {
   Clipboard,
   MessageSquare,
   Bell,
-  HelpCircle,
   UserPlus,
   Users,
   FilePlus,
@@ -18,43 +17,48 @@ import {
   Wifi,
   Inbox,
   CheckCircle,
-  Send,
   LogOut,
   ShieldCheck,
 } from 'lucide-react';
 
 const healthWorkerNav = [
-  { icon: LayoutDashboard, label: 'Dashboard',           path: '/health-worker' },
-  { icon: UserPlus,        label: 'Register Patient',    path: '/health-worker/register-patient' },
-  { icon: Users,           label: 'Patient Records',     path: '/health-worker/patients' },
-  { icon: FilePlus,        label: 'New Consultation',    path: '/health-worker/new-consultation' },
-  { icon: ClipboardList,   label: 'Consultation History',path: '/health-worker/consultations' },
-  { icon: Clock,           label: 'Pending Uploads',     path: '/health-worker/pending-uploads' },
-  { icon: MessageSquare,   label: 'Doctor Responses',    path: '/health-worker/responses' },
-  { icon: Wifi,            label: 'Network Monitor',     path: '/health-worker/network' },
+  { icon: LayoutDashboard, label: 'Dashboard',            path: '/health-worker' },
+  { icon: UserPlus,        label: 'Register Patient',     path: '/health-worker/register-patient' },
+  { icon: Users,           label: 'Patient Records',      path: '/health-worker/patients' },
+  { icon: FilePlus,        label: 'New Consultation',     path: '/health-worker/new-consultation' },
+  { icon: ClipboardList,   label: 'Consultation History', path: '/health-worker/consultations' },
+  { icon: Clock,           label: 'Pending Uploads',      path: '/health-worker/pending-uploads' },
+  { icon: MessageSquare,   label: 'Doctor Responses',     path: '/health-worker/responses' },
+  { icon: Wifi,            label: 'Network Monitor',      path: '/health-worker/network' },
+];
+
+const patientNav = [
+  { icon: LayoutDashboard, label: 'Dashboard',        path: '/patient' },
+  { icon: User,            label: 'My Profile',       path: '/patient/profile' },
+  { icon: FileText,        label: 'My Consultations', path: '/patient/consultations' },
+  { icon: Clipboard,       label: 'Medical Records',  path: '/patient/records' },
+  { icon: MessageSquare,   label: "Doctor's Advice",  path: '/patient/advice' },
+  { icon: Bell,            label: 'Notifications',    path: '/patient/notifications' },
+];
+
+const doctorNav = [
+  { icon: LayoutDashboard, label: 'Dashboard',              path: '/doctor' },
+  { icon: Inbox,           label: 'Incoming Consultations', path: '/doctor/incoming' },
+  { icon: CheckCircle,     label: 'Reviewed Cases',         path: '/doctor/reviewed' },
+  { icon: Users,           label: 'Patient Records',        path: '/doctor/patients' },
+  { icon: Bell,            label: 'Notifications',          path: '/doctor/notifications' },
+];
+
+const adminNav = [
+  { icon: ShieldCheck,     label: 'Admin Overview',         path: '/admin' },
 ];
 
 const navByRole = {
-  patient: [
-    { icon: LayoutDashboard, label: 'Dashboard',        path: '/patient' },
-    { icon: User,            label: 'My Profile',       path: '/patient/profile' },
-    { icon: FileText,        label: 'My Consultations', path: '/patient/consultations' },
-    { icon: Clipboard,       label: 'Medical Records',  path: '/patient/records' },
-    { icon: MessageSquare,   label: "Doctor's Advice",  path: '/patient/advice' },
-    { icon: Bell,            label: 'Notifications',    path: '/patient/notifications' },
-  ],
+  patient: patientNav,
   health_worker: healthWorkerNav,
   healthWorker: healthWorkerNav,
-  doctor: [
-    { icon: LayoutDashboard, label: 'Dashboard',              path: '/doctor' },
-    { icon: Inbox,           label: 'Incoming Consultations', path: '/doctor/incoming' },
-    { icon: CheckCircle,     label: 'Reviewed Cases',         path: '/doctor/reviewed' },
-    { icon: Users,           label: 'Patient Records',        path: '/doctor/patients' },
-    { icon: Bell,            label: 'Notifications',          path: '/doctor/notifications' },
-  ],
-  admin: [
-    { icon: ShieldCheck,     label: 'Admin Overview',         path: '/admin' },
-  ],
+  doctor: doctorNav,
+  admin: adminNav,
 };
 
 const SIDEBAR_WIDTH = 260;
@@ -101,7 +105,7 @@ function NavItem({ icon: Icon, label, path }) {
 export default function Sidebar({ role, isOpen, onClose }) {
   const navigate = useNavigate();
   const { logout } = useAuth();
-  const items = navByRole[role] || navByRole.health_worker;
+  const navigationItems = navByRole[role] || navByRole.health_worker;
 
   const handleLogout = () => {
     logout();
@@ -194,8 +198,8 @@ export default function Sidebar({ role, isOpen, onClose }) {
 
         {/* Nav items */}
         <nav style={{ flex: 1, paddingTop: 10, paddingBottom: 10 }}>
-          {items.map((item) => (
-            <NavItem key={item.path} {...item} />
+          {navigationItems.map((item) => (
+            <NavItem key={item.path} icon={item.icon} label={item.label} path={item.path} />
           ))}
         </nav>
 
@@ -208,6 +212,7 @@ export default function Sidebar({ role, isOpen, onClose }) {
           }}
         >
           <button
+            type="button"
             onClick={handleLogout}
             style={{
               display: 'flex',

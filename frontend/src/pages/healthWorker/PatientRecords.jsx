@@ -122,15 +122,17 @@ export default function PatientRecords() {
                 <tbody>
                   {filteredPatients.map((patient) => (
                     <tr key={patient.id}>
-                      <td style={{ fontWeight: 600, color: '#0284c7' }}>{patient.id}</td>
+                      <td style={{ fontWeight: 600, color: '#0284c7' }}>{patient.referenceId || patient.id}</td>
                       <td>
                         <div style={{ fontWeight: 600, color: '#0f172a' }}>{patient.name}</div>
-                        {patient.conditions?.length > 0 && (
-                          <div style={{ fontSize: 12, color: '#64748b' }}>
-                            {patient.conditions.slice(0, 2).join(', ')}
-                            {patient.conditions.length > 2 && '...'}
-                          </div>
-                        )}
+                        <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 600, color: '#b91c1c', background: '#fef2f2', padding: '1px 6px', borderRadius: 4 }}>
+                            Blood: {patient.bloodGroup || 'Unknown'}
+                          </span>
+                          {patient.conditions?.length > 0 && (
+                            <span>• {patient.conditions.slice(0, 2).join(', ')}</span>
+                          )}
+                        </div>
                       </td>
                       <td>
                         {patient.age} yrs / {patient.sex}
@@ -213,7 +215,7 @@ export default function PatientRecords() {
                   <div>
                     <h4 style={{ margin: 0, fontSize: 18, color: '#0f172a' }}>{selectedPatient.name}</h4>
                     <span style={{ fontSize: 13, color: '#64748b' }}>
-                      {selectedPatient.id} • {selectedPatient.age} yrs • {selectedPatient.sex} • Blood: {selectedPatient.bloodGroup || 'Unknown'}
+                      {selectedPatient.referenceId || selectedPatient.id} • {selectedPatient.age} yrs • {selectedPatient.sex} • <strong style={{ color: '#b91c1c' }}>Blood: {selectedPatient.bloodGroup || 'Unknown'}</strong>
                     </span>
                   </div>
                 </div>

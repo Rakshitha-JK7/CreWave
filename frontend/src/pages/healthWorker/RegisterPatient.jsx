@@ -90,10 +90,14 @@ export default function RegisterPatient() {
 
     setIsSubmitting(true);
     try {
-      const patientId = `PAT${Date.now().toString().slice(-4)}`;
+      const cleanName = (formData.name || 'Patient').trim().split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '') || 'Patient';
+      const randomDigits = Math.floor(10000 + Math.random() * 90000);
+      const referenceId = `${cleanName}-${randomDigits}`;
+
       const payload = {
         ...formData,
-        id: patientId,
+        id: referenceId,
+        referenceId,
         age: parseInt(formData.age, 10),
         emergencyContact: {
           name: formData.emergencyContactName,
@@ -104,8 +108,10 @@ export default function RegisterPatient() {
 
       const result = await patientService.createPatient(payload);
       if (result.success) {
-        setRegisteredPatient(result.data);
-        addNotification(`Patient ${result.data.name} (${result.data.id}) registered successfully!`, 'success');
+        const returnedPatient = result.data;
+        const displayId = returnedPatient.referenceId || returnedPatient.id || referenceId;
+        setRegisteredPatient({ ...returnedPatient, id: displayId, referenceId: displayId });
+        addNotification(`Patient ${returnedPatient.name} (${displayId}) registered successfully!`, 'success');
       } else {
         addNotification(result.error || 'Failed to register patient', 'error');
       }

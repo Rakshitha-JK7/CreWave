@@ -87,6 +87,10 @@ class ConsultationService {
     // Normalize vitals JSON
     const vitalsJson = typeof vitals === 'object' ? JSON.stringify(vitals) : vitals;
 
+    const specialization = payload.specialization || payload.targetSpecialization || 'General Medicine';
+    const doctorId = payload.doctorId || payload.assignedDoctorId || null;
+    const doctorName = payload.doctorName || payload.assignedDoctorName || null;
+
     // Determine initial status:
     // If essential summary is received by server, it's available to doctor
     const status = 'available_to_doctor';
@@ -100,14 +104,14 @@ class ConsultationService {
           main_complaint, symptoms, symptom_onset, symptom_duration, severity_progression,
           medical_history, medications, allergies, health_worker_observations, health_worker_notes,
           measurements_unavailable, urgency_category, immediate_action, consent_status,
-          vitals, created_at, updated_at
+          vitals, specialization, doctor_id, doctor_name, created_at, updated_at
         ) VALUES (
           ?, ?, ?, ?, ?,
           CURRENT_TIMESTAMP, ?, ?, ?,
           ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
-          ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+          ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         )`,
         [
           finalConsultationId,
@@ -133,6 +137,9 @@ class ConsultationService {
           immediateAction || null,
           consentStatus ? 1 : 0,
           vitalsJson,
+          specialization,
+          doctorId,
+          doctorName,
         ]
       );
     } catch (insertErr) {
@@ -140,9 +147,9 @@ class ConsultationService {
       if (
         insertErr.message &&
         (insertErr.message.includes('idempotency_key') ||
-         insertErr.message.includes('UNIQUE') ||
-         insertErr.message.includes('unique') ||
-         insertErr.code === '23505') // Postgres unique_violation code
+          insertErr.message.includes('UNIQUE') ||
+          insertErr.message.includes('unique') ||
+          insertErr.code === '23505') // Postgres unique_violation code
       ) {
         console.log(`[CareWave Consultation] Concurrent insert race detected for key: ${idempotencyKey}. Resolving existing record.`);
         const raceExisting = await db.get('SELECT id FROM consultations WHERE idempotency_key = ?', [idempotencyKey]);
@@ -297,6 +304,9 @@ class ConsultationService {
       consentStatus: Boolean(consultation.consent_status),
       createdAt: consultation.created_at,
       updatedAt: consultation.updated_at,
+      specialization: consultation.specialization || 'General Medicine',
+      doctorId: consultation.doctor_id || null,
+      doctorName: consultation.doctor_name || null,
       patient: {
         id: consultation.patient_id,
         referenceId: consultation.patientReferenceId,
@@ -442,6 +452,9 @@ class ConsultationService {
         mainComplaint: r.main_complaint,
         symptoms: r.symptoms,
         vitals,
+        specialization: r.specialization || 'General Medicine',
+        doctorId: r.doctor_id || null,
+        doctorName: r.doctor_name || null,
         consultationDate: r.consultation_date,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
@@ -459,6 +472,7 @@ class ConsultationService {
                       c.consultation_date as "consultationDate", c.priority, c.status,
                       c.sync_status as "syncStatus", c.main_complaint as "mainComplaint",
                       c.symptom_duration as "symptomDuration", c.urgency_category as "urgencyCategory",
+                      c.specialization, c.doctor_id as "doctorId", c.doctor_name as "doctorName",
                       c.created_at as "createdAt",
                       p.reference_id as "patientReferenceId", p.name as "patientName",
                       p.age as "patientAge", p.sex as "patientSex", p.village as "patientVillage",
@@ -517,6 +531,9 @@ class ConsultationService {
         symptomDuration: r.symptomDuration,
         urgencyCategory: r.urgencyCategory,
         createdAt: r.createdAt,
+        specialization: r.specialization || 'General Medicine',
+        doctorId: r.doctorId || null,
+        doctorName: r.doctorName || null,
         patient: {
           id: r.patientId,
           referenceId: r.patientReferenceId,
@@ -628,6 +645,18 @@ class ConsultationService {
         reviewedAt: r.reviewDate,
       })),
     };
+  }
+
+  /**
+   * Retrieve active approved doctors for consultation routing
+   */
+  async getDoctors() {
+    return await db.all(
+      `SELECT id, name, username, email, specialization, license_number as "licenseNumber", status
+       FROM users
+       WHERE role = 'doctor' AND status = 'active'
+       ORDER BY name ASC`
+    );
   }
 }
 

@@ -93,7 +93,7 @@ export default function PatientDashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 28 }}>
           <StatCard
             title="Total Consultations"
-            value={myConsultations.length}
+            value={consultations.length}
             icon={FileText}
             color="blue"
             subtitle="Lifetime clinic visits"

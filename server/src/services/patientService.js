@@ -14,7 +14,17 @@ class PatientService {
       sex,
       village,
       contactNumber,
+      phone,
       consent = true,
+      bloodGroup,
+      blood_group,
+      emergencyContact,
+      emergency_contact,
+      medicalHistory,
+      medical_history,
+      conditions,
+      allergies,
+      userId,
     } = data;
 
     if (!village) {
@@ -29,9 +39,23 @@ class PatientService {
       throw err;
     }
 
-    // Auto-generate referenceId if not provided (e.g. PAT-XXXX-XXXX)
-    const finalRefId = referenceId || `PAT-${uuidv4().substring(0, 8).toUpperCase()}`;
+    // Auto-generate referenceId if not provided in format Name-87263
+    const cleanName = (name || 'Patient').trim().split(/\s+/)[0].replace(/[^a-zA-Z0-9]/g, '') || 'Patient';
+    const randomDigits = Math.floor(10000 + Math.random() * 90000);
+    const finalRefId = referenceId || `${cleanName}-${randomDigits}`;
     const id = `P-${uuidv4()}`;
+
+    const finalBloodGroup = bloodGroup || blood_group || 'Unknown';
+    const finalEmergencyContact = typeof emergencyContact === 'object'
+      ? JSON.stringify(emergencyContact)
+      : (emergencyContact || emergency_contact || null);
+    const finalMedicalHistory = Array.isArray(conditions)
+      ? conditions.join(', ')
+      : (medicalHistory || medical_history || null);
+    const finalAllergies = Array.isArray(allergies)
+      ? allergies.join(', ')
+      : (allergies || null);
+    const finalPhone = contactNumber || phone || null;
 
     // Check for existing referenceId
     const existing = await db.get('SELECT id FROM patients WHERE reference_id = ?', [finalRefId]);
@@ -44,18 +68,25 @@ class PatientService {
 
     await db.run(
       `INSERT INTO patients (
-        id, reference_id, name, age, date_of_birth, sex, village, contact_number, consent, created_by, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        id, reference_id, user_id, name, age, date_of_birth, sex, village, contact_number,
+        consent, blood_group, emergency_contact, medical_history, allergies, created_by,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [
         id,
         finalRefId,
+        userId || null,
         name || null,
         age !== undefined ? parseInt(age, 10) : null,
         dateOfBirth || null,
         sex || null,
         village,
-        contactNumber || null,
+        finalPhone,
         consent ? 1 : 0,
+        finalBloodGroup,
+        finalEmergencyContact,
+        finalMedicalHistory,
+        finalAllergies,
         createdBy || null,
       ]
     );
@@ -67,8 +98,10 @@ class PatientService {
    * List or search patients
    */
   async getPatients({ search, village, limit = 50, offset = 0 } = {}) {
-    let sql = `SELECT id, reference_id as "referenceId", name, age, date_of_birth as "dateOfBirth",
+    let sql = `SELECT id, reference_id as "referenceId", user_id as "userId", name, age, date_of_birth as "dateOfBirth",
                       sex, village, contact_number as "contactNumber", consent,
+                      blood_group as "bloodGroup", emergency_contact as "emergencyContact",
+                      medical_history as "medicalHistory", allergies,
                       created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt"
                FROM patients WHERE 1=1`;
     const params = [];
@@ -87,10 +120,26 @@ class PatientService {
     params.push(parseInt(limit, 10), parseInt(offset, 10));
 
     const patients = await db.all(sql, params);
-    return patients.map(p => ({
-      ...p,
-      consent: Boolean(p.consent),
-    }));
+    return patients.map(p => {
+      let conditions = [];
+      if (p.medicalHistory) {
+        conditions = p.medicalHistory.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      let parsedAllergies = [];
+      if (p.allergies) {
+        parsedAllergies = p.allergies.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      return {
+        ...p,
+        id: p.referenceId || p.id,
+        internalId: p.id,
+        phone: p.contactNumber,
+        bloodGroup: p.bloodGroup || 'Unknown',
+        conditions,
+        allergies: parsedAllergies,
+        consent: Boolean(p.consent),
+      };
+    });
   }
 
   /**
@@ -98,8 +147,10 @@ class PatientService {
    */
   async getPatientById(idOrRef) {
     const patient = await db.get(
-      `SELECT id, reference_id as "referenceId", name, age, date_of_birth as "dateOfBirth",
+      `SELECT id, reference_id as "referenceId", user_id as "userId", name, age, date_of_birth as "dateOfBirth",
               sex, village, contact_number as "contactNumber", consent,
+              blood_group as "bloodGroup", emergency_contact as "emergencyContact",
+              medical_history as "medicalHistory", allergies,
               created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt"
        FROM patients
        WHERE id = ? OR reference_id = ?`,
@@ -123,8 +174,23 @@ class PatientService {
       [patient.id]
     );
 
+    let conditions = [];
+    if (patient.medicalHistory) {
+      conditions = patient.medicalHistory.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    let parsedAllergies = [];
+    if (patient.allergies) {
+      parsedAllergies = patient.allergies.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
     return {
       ...patient,
+      id: patient.referenceId || patient.id,
+      internalId: patient.id,
+      phone: patient.contactNumber,
+      bloodGroup: patient.bloodGroup || 'Unknown',
+      conditions,
+      allergies: parsedAllergies,
       consent: Boolean(patient.consent),
       consultations: consultations || [],
     };
