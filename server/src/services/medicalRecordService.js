@@ -269,12 +269,15 @@ class MedicalRecordService {
    * Retrieves full reconstructed medical record details including attachment verification and AI previews
    */
   async getReconstructedRecord(recordId) {
-    const consultation = await db.get('SELECT * FROM consultations WHERE id = ?', [recordId]);
+    let consultation = await db.get('SELECT * FROM consultations WHERE id = ?', [recordId]);
+    if (!consultation) {
+      consultation = await db.get('SELECT * FROM consultations WHERE idempotency_key = ? OR id LIKE ?', [recordId, `%${recordId}%`]);
+    }
     if (!consultation) return null;
 
-    const patient = await db.get('SELECT * FROM patients WHERE id = ?', [consultation.patient_id]);
-    const attachments = await db.all('SELECT * FROM attachments WHERE consultation_id = ?', [recordId]);
-    const restorations = await aiRestorationService.getRestorationsByConsultationId(recordId);
+    const patient = await db.get('SELECT * FROM patients WHERE id = ? OR reference_id = ?', [consultation.patient_id, consultation.patient_id]);
+    const attachments = await db.all('SELECT * FROM attachments WHERE consultation_id = ?', [consultation.id]);
+    const restorations = await aiRestorationService.getRestorationsByConsultationId(consultation.id);
 
     const restorationMap = {};
     for (const r of restorations) {

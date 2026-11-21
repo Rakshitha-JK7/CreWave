@@ -216,16 +216,29 @@ class ConsultationService {
    * Get complete consultation details
    */
   async getConsultationById(id) {
-    const consultation = await db.get(
+    let consultation = await db.get(
       `SELECT c.*,
               p.reference_id as "patientReferenceId", p.name as "patientName",
               p.age as "patientAge", p.sex as "patientSex", p.village as "patientVillage",
               p.contact_number as "patientContact"
        FROM consultations c
-       JOIN patients p ON c.patient_id = p.id
-       WHERE c.id = ?`,
-      [id]
+       LEFT JOIN patients p ON (c.patient_id = p.id OR c.patient_id = p.reference_id)
+       WHERE c.id = ? OR c.idempotency_key = ?`,
+      [id, id]
     );
+
+    if (!consultation && typeof id === 'string') {
+      consultation = await db.get(
+        `SELECT c.*,
+                p.reference_id as "patientReferenceId", p.name as "patientName",
+                p.age as "patientAge", p.sex as "patientSex", p.village as "patientVillage",
+                p.contact_number as "patientContact"
+         FROM consultations c
+         LEFT JOIN patients p ON (c.patient_id = p.id OR c.patient_id = p.reference_id)
+         WHERE c.id LIKE ?`,
+        [`%${id}%`]
+      );
+    }
 
     if (!consultation) {
       const err = new Error(`Consultation not found: ${id}`);

@@ -59,7 +59,6 @@ export class ResponseSync {
       console.warn('ResponseSync poll attempt failed:', err.message);
       return [];
     }
-    }
   }
 
   /**

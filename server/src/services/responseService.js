@@ -25,13 +25,17 @@ class ResponseService {
     }
 
     // Verify consultation exists
-    const consultation = await db.get('SELECT id, status FROM consultations WHERE id = ?', [consultationId]);
+    let consultation = await db.get('SELECT id, status FROM consultations WHERE id = ? OR idempotency_key = ?', [consultationId, consultationId]);
+    if (!consultation && typeof consultationId === 'string') {
+      consultation = await db.get('SELECT id, status FROM consultations WHERE id LIKE ?', [`%${consultationId}%`]);
+    }
     if (!consultation) {
       const err = new Error(`Consultation not found: ${consultationId}`);
       err.statusCode = 404;
       err.code = 'CONSULTATION_NOT_FOUND';
       throw err;
     }
+    consultationId = consultation.id;
 
     const finalDoctorId = doctorId || (doctorUser ? doctorUser.id : 'DOC-DEMO-01');
     const finalDoctorName = doctorName || (doctorUser ? doctorUser.name : 'Dr. Remote Specialist');
@@ -138,6 +142,10 @@ class ResponseService {
    * Retrieve all responses for a consultation
    */
   async getResponsesByConsultation(consultationId) {
+    let targetId = consultationId;
+    const cons = await db.get('SELECT id FROM consultations WHERE id = ? OR idempotency_key = ?', [consultationId, consultationId]);
+    if (cons) targetId = cons.id;
+
     const rows = await db.all(
       `SELECT r.id, r.consultation_id as "consultationId", r.doctor_id as "doctorId",
               r.doctor_name as "doctorName", r.review_date as "reviewDate",
@@ -150,7 +158,7 @@ class ResponseService {
        FROM doctor_responses r
        WHERE r.consultation_id = ?
        ORDER BY r.created_at DESC`,
-      [consultationId]
+      [targetId]
     );
 
     return rows.map(r => ({

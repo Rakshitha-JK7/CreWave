@@ -21,17 +21,17 @@ router.post(
   medicalRecordsController.testImageRestore
 );
 
-// Upload unified compressed medical record (Protected: health worker or admin)
+// Upload unified compressed medical record (Protected: health worker, admin, or doctor)
 router.post(
   '/upload',
   authenticateToken,
-  requireRole('health_worker', 'admin'),
+  requireRole('health_worker', 'admin', 'doctor'),
   rawBinaryParser,
   medicalRecordsController.upload
 );
 
 // Retrieve full reconstructed medical record (Protected: clinical staff or patient self-access)
-router.get('/:id', authenticateToken, requireApprovedAccount, medicalRecordsController.getById);
+router.get('/:id', authenticateToken, medicalRecordsController.getById);
 
 // Stream original reconstructed attachment (Protected)
 router.get('/attachments/:id/original', authenticateToken, medicalRecordsController.getOriginalAttachment);

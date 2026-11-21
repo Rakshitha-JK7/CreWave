@@ -212,7 +212,9 @@ export class TransmissionManager {
       controller.abort();
     }, timeoutMs);
 
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('carewave_auth_token') : null;
+    const token = typeof localStorage !== 'undefined'
+      ? (localStorage.getItem('carewave_auth_token') || localStorage.getItem('carewave_token') || localStorage.getItem('token'))
+      : null;
     const startTime = performance.now();
 
     this.notify(recordId, {
