@@ -23,6 +23,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import axios from 'axios';
+import { api } from '../../services/api';
 import { generateSyntheticMedicalRecord } from '../../telemetry/syntheticDataGenerator';
 import { transmissionManager, TransmissionState } from '../../telemetry/transmissionManager';
 import { adaptiveBandwidthManager, NetworkClass } from '../../telemetry/adaptiveBandwidthManager';
@@ -85,7 +86,7 @@ export default function CareBridgeTestingDashboard() {
     try {
       for (let i = 0; i < 4; i++) {
         const t0 = performance.now();
-        await axios.get('/api/medical-records/ping');
+        await api.get('/medical-records/ping');
         const rtt = Math.round(performance.now() - t0);
         pings.push(rtt);
         await new Promise(r => setTimeout(r, 80));
@@ -177,7 +178,7 @@ export default function CareBridgeTestingDashboard() {
         setLastReceipt(uploadResult.receipt);
 
         // Fetch reconstructed record from server to verify byte-identical reproduction
-        const serverFetch = await axios.get(`/api/medical-records/${submitted.recordId}`);
+        const serverFetch = await api.get(`/medical-records/${submitted.recordId}`);
         setReconstructedServerRecord(serverFetch.data?.data);
 
         logAuditEntry({
@@ -243,7 +244,7 @@ export default function CareBridgeTestingDashboard() {
 
       addLog('Step 5: Verifying server database has NO partial/incomplete record created...');
       try {
-        await axios.get(`/api/medical-records/${recordId}`);
+        await api.get(`/medical-records/${recordId}`);
         addLog('Step 5 FAILED: Incomplete record was found on server!', false);
       } catch (e) {
         if (e.response?.status === 404) {
@@ -347,7 +348,7 @@ export default function CareBridgeTestingDashboard() {
 
       const b64 = canvas.toDataURL('image/png');
 
-      const res = await axios.post('/api/medical-records/test-image-restore', {
+      const res = await api.post('/medical-records/test-image-restore', {
         imageBase64: b64,
         filename: `${aiModality}_test.png`,
         modality: aiModality,
@@ -768,7 +769,7 @@ export default function CareBridgeTestingDashboard() {
                           </td>
                           <td style={{ padding: '8px 12px' }}>
                             <a
-                              href={att.originalUrl || att.url}
+                              href={`${att.originalUrl || att.url}${typeof localStorage !== 'undefined' && localStorage.getItem('carewave_auth_token') ? `?token=${localStorage.getItem('carewave_auth_token')}` : ''}`}
                               target="_blank"
                               rel="noreferrer"
                               style={{ color: '#0284c7', textDecoration: 'none', fontWeight: 600 }}
@@ -890,7 +891,7 @@ export default function CareBridgeTestingDashboard() {
                   </div>
                   {aiTestResult.originalUrl && (
                     <img
-                      src={aiTestResult.originalUrl}
+                      src={`${aiTestResult.originalUrl}${typeof localStorage !== 'undefined' && localStorage.getItem('carewave_auth_token') ? `?token=${localStorage.getItem('carewave_auth_token')}` : ''}`}
                       alt="Original"
                       style={{ maxWidth: '100%', height: 180, objectFit: 'contain', border: '1px solid #cbd5e1', borderRadius: 6, backgroundColor: '#000' }}
                     />
@@ -902,14 +903,17 @@ export default function CareBridgeTestingDashboard() {
 
                 {/* Enhanced Preview */}
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#7c3aed', marginBottom: 8 }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#7c3aed', marginBottom: 4 }}>
                     {aiTestResult.status === 'skipped_unsupported_modality'
                       ? 'DIAGNOSTIC SAFETY BYPASS (Zero Generative Hallucination)'
                       : 'AI ENHANCED PREVIEW (Stored Separately)'}
                   </div>
+                  <div style={{ fontSize: '0.7rem', color: '#9333ea', fontWeight: 600, marginBottom: 8 }}>
+                    [NON-DIAGNOSTIC UNLESS CLINICALLY VALIDATED]
+                  </div>
                   {aiTestResult.enhancedUrl ? (
                     <img
-                      src={aiTestResult.enhancedUrl}
+                      src={`${aiTestResult.enhancedUrl}${typeof localStorage !== 'undefined' && localStorage.getItem('carewave_auth_token') ? `?token=${localStorage.getItem('carewave_auth_token')}` : ''}`}
                       alt="Enhanced"
                       style={{ maxWidth: '100%', height: 180, objectFit: 'contain', border: '1px solid #cbd5e1', borderRadius: 6, backgroundColor: '#000' }}
                     />

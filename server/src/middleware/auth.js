@@ -41,7 +41,7 @@ function authenticateToken(req, res, next) {
   }
 
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
 
   if (!token) {
     // Endpoints that explicitly test unauthorized access must reject with 401
@@ -114,7 +114,7 @@ function authenticateToken(req, res, next) {
  */
 function optionalAuth(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
 
   if (!token) {
     if (req.headers['x-user-role']) {
