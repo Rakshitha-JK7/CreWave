@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS patients (
   sex VARCHAR(20),
   village VARCHAR(150) NOT NULL,
   contact_number VARCHAR(50),
-  consent BOOLEAN DEFAULT 1,
+  consent BOOLEAN DEFAULT TRUE,
   created_by VARCHAR(64),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS consultations (
   measurements_unavailable TEXT,
   urgency_category VARCHAR(50),
   immediate_action TEXT,
-  consent_status BOOLEAN DEFAULT 1,
+  consent_status BOOLEAN DEFAULT TRUE,
   vitals TEXT, -- JSON-stringified vitals structure
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS doctor_responses (
   assessment TEXT NOT NULL,
   recommended_steps TEXT,
   follow_up_advice TEXT,
-  referral_required BOOLEAN DEFAULT 0,
+  referral_required BOOLEAN DEFAULT FALSE,
   referral_details TEXT,
   prescription_text TEXT,
   prescription_document_path TEXT,
