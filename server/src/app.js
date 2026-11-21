@@ -34,6 +34,27 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Static file access for completed uploads
 app.use('/uploads/completed', express.static(config.completedDir));
 
+// Welcome / Root Landing Endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'online',
+    service: 'CareWave Rural Telemedicine Backend',
+    version: '1.0.0',
+    description: 'Offline-first, priority-driven clinical consultation and resumable chunked upload system',
+    frontendUrl: 'http://localhost:5173',
+    database: `${db.getType().toUpperCase()} (server/carewave.db)`,
+    availableEndpoints: {
+      health: 'GET /api/health',
+      patients: 'GET,POST /api/patients',
+      consultations: 'GET,POST /api/consultations',
+      doctorQueue: 'GET /api/doctor/consultations',
+      chunkedUploads: 'POST /api/uploads/init',
+      syncResponses: 'GET /api/sync/responses',
+      auth: 'POST /api/auth/login',
+    },
+  });
+});
+
 // Reachability / Network Ping endpoint (Essential for network latency measurement)
 app.get(['/api/health', '/api/ping', '/health', '/ping'], (req, res) => {
   res.status(200).json({
