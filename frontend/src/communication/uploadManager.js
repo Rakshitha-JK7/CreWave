@@ -84,9 +84,13 @@ export class UploadManager {
     };
 
     const initRes = await defaultRetryManager.executeWithRetry(async () => {
+      const token = typeof localStorage !== 'undefined' ? (localStorage.getItem('carewave_token') || localStorage.getItem('token')) : null;
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await networkSimulator.simulatedFetch(`${this.apiBaseUrl}/uploads/init`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(initPayload),
         signal,
       });
@@ -148,11 +152,15 @@ export class UploadManager {
 
     // Step 3: Complete upload
     const completeRes = await defaultRetryManager.executeWithRetry(async () => {
+      const token = typeof localStorage !== 'undefined' ? (localStorage.getItem('carewave_token') || localStorage.getItem('token')) : null;
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await networkSimulator.simulatedFetch(
         `${this.apiBaseUrl}/uploads/${initRes.uploadId || componentId}/complete`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             consultationId,
             componentId,

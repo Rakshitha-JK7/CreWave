@@ -262,8 +262,11 @@ export async function cancelUpload(itemId) {
  */
 export async function syncDoctorResponses() {
   try {
-    await responseSync.poll();
-    const responses = await dbGetDoctorResponses();
+    const polled = await responseSync.poll();
+    let responses = await dbGetDoctorResponses().catch(() => []);
+    if ((!responses || responses.length === 0) && Array.isArray(polled)) {
+      responses = polled;
+    }
     return { success: true, responses: responses || [] };
   } catch (err) {
     return { success: false, error: err.message };

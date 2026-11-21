@@ -197,12 +197,16 @@ export class SyncQueue extends EventEmitter {
       if (item.type === 'summary') {
         // Group 1: Send essential summary
         await defaultRetryManager.executeWithRetry(async () => {
+          const token = typeof localStorage !== 'undefined' ? (localStorage.getItem('carewave_token') || localStorage.getItem('token')) : null;
+          const headers = {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': item.payload.idempotencyKey,
+          };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
           const res = await networkSimulator.simulatedFetch(`${this.apiBaseUrl}/consultations`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Idempotency-Key': item.payload.idempotencyKey,
-            },
+            headers,
             body: JSON.stringify(item.payload),
             signal,
           });

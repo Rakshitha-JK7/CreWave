@@ -37,6 +37,24 @@ class ResponseService {
     const finalDoctorName = doctorName || (doctorUser ? doctorUser.name : 'Dr. Remote Specialist');
     const responseId = `RES-${uuidv4().substring(0, 8).toUpperCase()}`;
 
+    const finalRecommendedSteps = recommendedSteps || payload.recommendations || payload.healthWorkerInstructions || null;
+    const finalFollowUpAdvice = followUpAdvice || payload.followUpInstructions || null;
+    const finalReferralRequired = (referralRequired || (payload.referral && payload.referral.recommended)) ? 1 : 0;
+    const finalReferralDetails = referralDetails || (payload.referral && payload.referral.details) || null;
+
+    let finalPrescriptionText = prescriptionText || null;
+    if (!finalPrescriptionText && (payload.prescriptions || payload.prescription)) {
+      const rxList = payload.prescriptions || payload.prescription;
+      if (Array.isArray(rxList)) {
+        finalPrescriptionText = rxList
+          .filter(m => m && (m.medicineName || m.name))
+          .map(m => `${m.medicineName || m.name} | ${m.dosage || 'Standard dose'} | ${m.frequency || 'Daily'} | ${m.duration || '5 days'}${m.instructions ? ` (${m.instructions})` : ''}`)
+          .join('\n');
+      } else if (typeof rxList === 'string') {
+        finalPrescriptionText = rxList;
+      }
+    }
+
     // Insert response record
     await db.run(
       `INSERT INTO doctor_responses (
@@ -56,19 +74,19 @@ class ResponseService {
         finalDoctorId,
         finalDoctorName,
         assessment,
-        recommendedSteps || null,
-        followUpAdvice || null,
-        referralRequired ? 1 : 0,
-        referralDetails || null,
-        prescriptionText || null,
+        finalRecommendedSteps,
+        finalFollowUpAdvice,
+        finalReferralRequired,
+        finalReferralDetails,
+        finalPrescriptionText,
         prescriptionDocumentPath || null,
       ]
     );
 
-    // Update consultation status to 'response_submitted' and reviewed_by_doctor
+    // Update consultation status to 'response_available' and sync_status to delivered
     await db.run(
       `UPDATE consultations
-       SET status = 'response_submitted', updated_at = CURRENT_TIMESTAMP
+       SET status = 'response_available', sync_status = 'delivered', updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [consultationId]
     );
@@ -144,7 +162,7 @@ class ResponseService {
   /**
    * Sync API: Retrieve pending responses for the clinic
    */
-  async getPendingResponsesForClinic({ clinicId, healthWorkerId, since } = {}) {
+  async getPendingResponsesForClinic({ clinicId, healthWorkerId, patientId, since } = {}) {
     let sql = `SELECT r.id, r.consultation_id as "consultationId", r.doctor_id as "doctorId",
                       r.doctor_name as "doctorName", r.review_date as "reviewDate",
                       r.assessment, r.recommended_steps as "recommendedSteps",
@@ -155,19 +173,18 @@ class ResponseService {
                       p.reference_id as "patientReferenceId", p.name as "patientName"
                FROM doctor_responses r
                JOIN consultations c ON r.consultation_id = c.id
-               JOIN patients p ON c.patient_id = p.id
-               WHERE r.delivery_status != 'acknowledged'`;
+               LEFT JOIN patients p ON (c.patient_id = p.id OR c.patient_id = p.reference_id)
+               WHERE 1=1`;
     const params = [];
 
-    if (clinicId && healthWorkerId) {
-      sql += ` AND (c.clinic_id = ? OR c.health_worker_id = ?)`;
-      params.push(clinicId, healthWorkerId);
-    } else if (clinicId) {
-      sql += ` AND c.clinic_id = ?`;
-      params.push(clinicId);
-    } else if (healthWorkerId) {
-      sql += ` AND c.health_worker_id = ?`;
-      params.push(healthWorkerId);
+    if (patientId) {
+      sql += ` AND (c.patient_id = ? OR p.reference_id = ? OR p.id = ? OR p.name = ?)`;
+      params.push(patientId, patientId, patientId, patientId);
+    } else {
+      if (clinicId && clinicId !== 'CLINIC-RURAL-01' && clinicId !== 'all') {
+        sql += ` AND (c.clinic_id = ? OR c.clinic_id LIKE ?)`;
+        params.push(clinicId, `%${clinicId}%`);
+      }
     }
 
     if (since) {
@@ -179,26 +196,57 @@ class ResponseService {
 
     const rows = await db.all(sql, params);
 
-    return rows.map(r => ({
-      id: r.id,
-      consultationId: r.consultationId,
-      doctorId: r.doctorId,
-      doctorName: r.doctorName,
-      reviewDate: r.reviewDate,
-      assessment: r.assessment,
-      recommendedSteps: r.recommendedSteps,
-      followUpAdvice: r.followUpAdvice,
-      referralRequired: Boolean(r.referralRequired),
-      referralDetails: r.referralDetails,
-      prescriptionText: r.prescriptionText,
-      deliveryStatus: r.deliveryStatus,
-      createdAt: r.createdAt,
-      patient: {
-        id: r.patientId,
-        referenceId: r.patientReferenceId,
-        name: r.patientName,
-      },
-    }));
+    return rows.map(r => {
+      let prescriptions = [];
+      if (r.prescriptionText) {
+        try {
+          const parsed = JSON.parse(r.prescriptionText);
+          if (Array.isArray(parsed)) prescriptions = parsed;
+        } catch (e) {
+          prescriptions = r.prescriptionText.split('\n').filter(Boolean).map(line => {
+            const parts = line.split('|').map(s => s.trim());
+            return {
+              medicineName: parts[0] || line,
+              dosage: parts[1] || 'As directed',
+              frequency: parts[2] || 'Daily',
+              duration: parts[3] || '5 days',
+              instructions: parts[4] || '',
+            };
+          });
+        }
+      }
+
+      return {
+        id: r.id,
+        consultationId: r.consultationId,
+        doctorId: r.doctorId,
+        doctorName: r.doctorName,
+        reviewDate: r.reviewDate,
+        assessment: r.assessment,
+        recommendations: r.recommendedSteps,
+        recommendedSteps: r.recommendedSteps,
+        followUpInstructions: r.followUpAdvice,
+        followUpAdvice: r.followUpAdvice,
+        referralRequired: Boolean(r.referralRequired),
+        referralDetails: r.referralDetails,
+        referral: {
+          recommended: Boolean(r.referralRequired),
+          details: r.referralDetails || '',
+        },
+        prescriptionText: r.prescriptionText,
+        prescriptions,
+        prescription: prescriptions,
+        deliveryStatus: r.deliveryStatus,
+        createdAt: r.createdAt,
+        submittedAt: r.createdAt,
+        patientName: r.patientName || r.patientReferenceId || 'Rural Patient',
+        patient: {
+          id: r.patientId,
+          referenceId: r.patientReferenceId,
+          name: r.patientName,
+        },
+      };
+    });
   }
 
   /**

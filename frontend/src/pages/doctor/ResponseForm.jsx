@@ -142,76 +142,6 @@ export default function ResponseForm() {
     }
   };
 
-  if (isSubmitted) {
-    if (loading) {
-    return (
-      <DashboardLayout role="doctor">
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
-          <LoadingSpinner size="lg" text="Loading consultation record from database..." />
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  if (!consultation) {
-    return (
-      <DashboardLayout role="doctor">
-        <div style={{ maxWidth: 600, margin: '60px auto', textAlign: 'center' }}>
-          <EmptyState
-            icon={FileText}
-            title="Consultation Not Found"
-            description={`Consultation #${id} was not found in the database. It may have been removed or has not been uploaded yet.`}
-          />
-          <button
-            onClick={() => navigate('/doctor')}
-            style={{
-              marginTop: 16,
-              padding: '10px 20px',
-              backgroundColor: '#0284c7',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 8,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Back to Consultations
-          </button>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  return (
-      <DashboardLayout role="doctor">
-        <div style={{ maxWidth: 650, margin: '60px auto', background: '#fff', padding: 40, borderRadius: 16, textAlign: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-            <CheckCircle size={36} />
-          </div>
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
-            Medical Response Submitted & Signed
-          </h2>
-          <p style={{ color: '#64748b', fontSize: 15, marginBottom: 24 }}>
-            Your assessment, prescriptions, and advice for <strong>{consultation?.patientName}</strong> (Case #{consultation?.id}) have been cryptographically stamped and synchronized for delivery to the rural healthcare worker.
-          </p>
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, marginBottom: 28, fontSize: 13, color: '#475569', textAlign: 'left' }}>
-            <div style={{ marginBottom: 6 }}><strong>Doctor:</strong> {currentUser?.name || 'Dr. Anjali Mehta'}</div>
-            <div style={{ marginBottom: 6 }}><strong>Status:</strong> Response Delivered / Ready for Clinic Transmission</div>
-            <div><strong>Timestamp:</strong> {new Date().toLocaleString()}</div>
-          </div>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-            <button className="btn btn-primary" onClick={() => navigate('/doctor/incoming')}>
-              Review Next Case
-            </button>
-            <button className="btn btn-secondary" onClick={() => navigate('/doctor/reviewed')}>
-              View Reviewed Cases
-            </button>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   if (loading) {
     return (
       <DashboardLayout role="doctor">
@@ -246,6 +176,37 @@ export default function ResponseForm() {
           >
             Back to Consultations
           </button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (isSubmitted) {
+    return (
+      <DashboardLayout role="doctor">
+        <div style={{ maxWidth: 650, margin: '60px auto', background: '#fff', padding: 40, borderRadius: 16, textAlign: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <CheckCircle size={36} />
+          </div>
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
+            Medical Response Submitted & Signed
+          </h2>
+          <p style={{ color: '#64748b', fontSize: 15, marginBottom: 24 }}>
+            Your assessment, prescriptions, and advice for <strong>{consultation?.patientName || 'Patient'}</strong> (Case #{consultation?.id}) have been cryptographically stamped and synchronized for delivery to the rural healthcare worker.
+          </p>
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, marginBottom: 28, fontSize: 13, color: '#475569', textAlign: 'left' }}>
+            <div style={{ marginBottom: 6 }}><strong>Doctor:</strong> {currentUser?.name || 'Dr. Anjali Mehta'}</div>
+            <div style={{ marginBottom: 6 }}><strong>Status:</strong> Response Delivered / Ready for Clinic Transmission</div>
+            <div><strong>Timestamp:</strong> {new Date().toLocaleString()}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <button className="btn btn-primary" onClick={() => navigate('/doctor/incoming')}>
+              Review Next Case
+            </button>
+            <button className="btn btn-secondary" onClick={() => navigate('/doctor/reviewed')}>
+              View Reviewed Cases
+            </button>
+          </div>
         </div>
       </DashboardLayout>
     );

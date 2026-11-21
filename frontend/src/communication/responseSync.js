@@ -33,9 +33,14 @@ export class ResponseSync {
   async poll() {
     try {
       const responses = await defaultRetryManager.executeWithRetry(async () => {
+        const token = typeof localStorage !== 'undefined' ? (localStorage.getItem('carewave_token') || localStorage.getItem('token')) : null;
+        const headers = { 'Accept': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
         const res = await networkSimulator.simulatedFetch(`${this.apiBaseUrl}/sync/responses`, {
           method: 'GET',
-          headers: { 'Accept': 'application/json' },
+          headers,
         });
         if (!res.ok) {
           throw new Error(`Polling failed: HTTP ${res.status}`);
@@ -48,9 +53,12 @@ export class ResponseSync {
           await this.processIncomingResponse(item);
         }
       }
+      return Array.isArray(responses) ? responses : [];
     } catch (err) {
       // Quietly handle poll failures when offline or intermittent
       console.warn('ResponseSync poll attempt failed:', err.message);
+      return [];
+    }
     }
   }
 

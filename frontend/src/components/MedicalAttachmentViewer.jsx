@@ -25,8 +25,12 @@ export default function MedicalAttachmentViewer({ attachment, onClose }) {
   const isPdf = ext === 'pdf';
   const isDoc = ['doc', 'docx', 'txt'].includes(ext);
 
-  const originalUrl = attachment.originalUrl || attachment.url || `/api/medical-records/attachments/${attachment.id}/original`;
-  const enhancedUrl = attachment.enhancedPreview?.url || `/api/medical-records/attachments/${attachment.id}/enhanced`;
+  const token = typeof localStorage !== 'undefined' ? (localStorage.getItem('carewave_token') || localStorage.getItem('token')) : null;
+  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+  const rawOriginal = attachment.originalUrl || attachment.url || `/api/medical-records/attachments/${attachment.id}/original`;
+  const rawEnhanced = attachment.enhancedPreview?.url || attachment.enhancedPreview?.previewUrl || `/api/medical-records/attachments/${attachment.id}/enhanced`;
+  const originalUrl = rawOriginal.includes('?') ? rawOriginal : `${rawOriginal}${tokenParam}`;
+  const enhancedUrl = rawEnhanced.includes('?') ? rawEnhanced : `${rawEnhanced}${tokenParam}`;
   const hasEnhanced = Boolean(attachment.enhancedPreview);
 
   return (

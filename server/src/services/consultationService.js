@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const db = require('../models/db');
 const patientService = require('./patientService');
+const aiRestorationService = require('./aiRestorationService');
 
 class ConsultationService {
   /**
@@ -222,7 +223,7 @@ class ConsultationService {
               p.age as "patientAge", p.sex as "patientSex", p.village as "patientVillage",
               p.contact_number as "patientContact"
        FROM consultations c
-       JOIN patients p ON c.patient_id = p.id
+       LEFT JOIN patients p ON (c.patient_id = p.id OR c.patient_id = p.reference_id)
        WHERE c.id = ?`,
       [id]
     );
@@ -246,6 +247,13 @@ class ConsultationService {
        ORDER BY priority ASC, created_at ASC`,
       [id]
     );
+
+    // AI restorations for comparison viewer
+    const restorations = await aiRestorationService.getRestorationsByConsultationId(id).catch(() => []);
+    const restorationMap = {};
+    for (const r of restorations) {
+      restorationMap[r.attachment_id] = r;
+    }
 
     // Doctor responses
     const responses = await db.all(
@@ -276,6 +284,9 @@ class ConsultationService {
     const completedAttachments = attachments.filter(a => a.uploadStatus === 'completed').length;
     const pendingAttachments = totalAttachments - completedAttachments;
 
+    const chiefComplaintText = consultation.main_complaint || 'Consultation Review';
+    const symptomsText = consultation.symptoms || 'No specific symptom description recorded.';
+
     return {
       id: consultation.id,
       idempotencyKey: consultation.idempotency_key,
@@ -284,11 +295,21 @@ class ConsultationService {
       clinicId: consultation.clinic_id,
       consultationDate: consultation.consultation_date,
       priority: consultation.priority,
+      urgency: consultation.priority,
       status: consultation.status,
       syncStatus: consultation.sync_status,
+      chiefComplaint: chiefComplaintText,
+      mainComplaint: chiefComplaintText,
+      symptoms: symptomsText,
+      patientName: consultation.patientName || 'Patient',
+      patientAge: consultation.patientAge,
+      patientSex: consultation.patientSex,
+      patientVillage: consultation.patientVillage,
+      clinicName: consultation.clinic_id ? `Clinic #${consultation.clinic_id}` : 'Rampur Primary Health Center',
+      healthWorkerName: 'Community Health Staff',
       clinicalSummary: {
-        mainComplaint: consultation.main_complaint,
-        symptoms: consultation.symptoms,
+        mainComplaint: chiefComplaintText,
+        symptoms: symptomsText,
         onset: consultation.symptom_onset,
         duration: consultation.symptom_duration,
         severityProgression: consultation.severity_progression,
@@ -311,20 +332,32 @@ class ConsultationService {
       patient: {
         id: consultation.patient_id,
         referenceId: consultation.patientReferenceId,
-        name: consultation.patientName,
+        name: consultation.patientName || 'Patient',
         age: consultation.patientAge,
         sex: consultation.patientSex,
         village: consultation.patientVillage,
         contactNumber: consultation.patientContact,
       },
-      attachments: attachments.map(a => ({
-        ...a,
-        name: a.name || a.fileName,
-        fileName: a.fileName || a.name,
-        url: a.uploadStatus === 'completed' ? `/api/medical-records/attachments/${a.id}/original` : null,
-        originalUrl: `/api/medical-records/attachments/${a.id}/original`,
-        isCompleted: a.uploadStatus === 'completed',
-      })),
+      attachments: attachments.map(a => {
+        const rest = restorationMap[a.id];
+        return {
+          ...a,
+          name: a.name || a.fileName,
+          fileName: a.fileName || a.name,
+          url: `/api/medical-records/attachments/${a.id}/original`,
+          originalUrl: `/api/medical-records/attachments/${a.id}/original`,
+          isCompleted: a.uploadStatus === 'completed',
+          enhancedPreview: rest && rest.status === 'completed' ? {
+            restorationId: rest.id,
+            enhancedHash: rest.enhanced_file_hash,
+            modelName: rest.model_name,
+            modelVersion: rest.model_version,
+            processingTimeMs: rest.processing_time_ms,
+            previewUrl: `/api/medical-records/attachments/${a.id}/enhanced`,
+            url: `/api/medical-records/attachments/${a.id}/enhanced`,
+          } : null,
+        };
+      }),
       attachmentStats: {
         total: totalAttachments,
         completed: completedAttachments,
@@ -485,7 +518,7 @@ class ConsultationService {
                       (SELECT COUNT(*) FROM attachments a WHERE a.consultation_id = c.id AND a.upload_status = 'completed') as "completedAttachments",
                       (SELECT COUNT(*) FROM doctor_responses dr WHERE dr.consultation_id = c.id) as "responseCount"
                FROM consultations c
-               JOIN patients p ON c.patient_id = p.id
+               LEFT JOIN patients p ON (c.patient_id = p.id OR c.patient_id = p.reference_id)
                WHERE 1=1`;
     const params = [];
 
@@ -526,16 +559,23 @@ class ConsultationService {
         id: r.id,
         idempotencyKey: r.idempotencyKey,
         patientId: r.patientId,
+        patientName: r.patientName || r.patientReferenceId || 'Rural Patient',
+        patientAge: r.patientAge,
+        patientSex: r.patientSex,
+        patientVillage: r.patientVillage,
         healthWorkerId: r.healthWorkerId,
         clinicId: r.clinicId,
+        clinicName: r.clinic_name || 'Rampur Primary Health Center',
         consultationDate: r.consultationDate,
         priority: r.priority,
+        urgency: r.priority,
         status: r.status,
         syncStatus: r.syncStatus,
         mainComplaint: r.mainComplaint,
         symptomDuration: r.symptomDuration,
         urgencyCategory: r.urgencyCategory,
         createdAt: r.createdAt,
+        receivedAt: r.createdAt,
         specialization: r.specialization || 'General Medicine',
         doctorId: r.doctorId || null,
         doctorName: r.doctorName || null,

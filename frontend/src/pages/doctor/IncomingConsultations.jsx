@@ -58,30 +58,38 @@ export default function IncomingConsultations() {
       // Search
       const query = searchQuery.trim().toLowerCase();
       if (query) {
-        const matchesName = item.patientName?.toLowerCase().includes(query);
-        const matchesId = item.id?.toLowerCase().includes(query);
-        const matchesClinic = item.clinicName?.toLowerCase().includes(query);
-        if (!matchesName && !matchesId && !matchesClinic) return false;
+        const name = String(item.patientName || item.patient?.name || '').toLowerCase();
+        const id = String(item.id || '').toLowerCase();
+        const clinic = String(item.clinicName || '').toLowerCase();
+        if (!name.includes(query) && !id.includes(query) && !clinic.includes(query)) return false;
       }
 
       // Status filter
       if (statusFilter !== 'all') {
+        const s = item.status;
         if (statusFilter === 'pending') {
-          if (!['delivered', 'pending_upload', 'partially_uploaded'].includes(item.status)) return false;
+          if (!['delivered', 'available_to_doctor', 'pending_upload', 'partially_uploaded', 'pending'].includes(s)) return false;
         } else if (statusFilter === 'under_review') {
-          if (item.status !== 'under_review') return false;
+          if (!['under_review', 'in_review'].includes(s)) return false;
         } else if (statusFilter === 'reviewed') {
-          if (!['response_available', 'completed'].includes(item.status)) return false;
+          if (!['response_available', 'response_submitted', 'completed', 'reviewed_by_doctor', 'response_received_by_clinic'].includes(s)) return false;
         } else if (statusFilter === 'response_available') {
-          if (item.status !== 'response_available') return false;
+          if (!['response_available', 'response_submitted', 'response_received_by_clinic'].includes(s)) return false;
         }
       }
 
       // Urgency filter
       if (urgencyFilter !== 'all') {
-        if (urgencyFilter === 'urgent') {
-          if (!['urgent', 'critical'].includes(item.urgency)) return false;
-        } else if (item.urgency !== urgencyFilter) {
+        const u = String(item.urgency || item.priority || 'normal').toLowerCase();
+        if (urgencyFilter === 'critical') {
+          if (!['critical', 'emergency'].includes(u)) return false;
+        } else if (urgencyFilter === 'urgent') {
+          if (!['urgent', 'critical', 'emergency', 'high'].includes(u)) return false;
+        } else if (urgencyFilter === 'priority') {
+          if (!['priority', 'medium', 'normal'].includes(u)) return false;
+        } else if (urgencyFilter === 'routine') {
+          if (!['routine', 'low', 'normal'].includes(u)) return false;
+        } else if (u !== urgencyFilter.toLowerCase()) {
           return false;
         }
       }
@@ -108,8 +116,10 @@ export default function IncomingConsultations() {
       return true;
     }).sort((a, b) => {
       // Urgent and critical cases first
-      const urgencyRank = { critical: 4, urgent: 3, priority: 2, routine: 1 };
-      const diff = (urgencyRank[b.urgency] || 0) - (urgencyRank[a.urgency] || 0);
+      const urgencyRank = { emergency: 5, critical: 4, urgent: 3, high: 3, priority: 2, normal: 2, routine: 1, low: 1 };
+      const urgA = String(a.urgency || a.priority || 'normal').toLowerCase();
+      const urgB = String(b.urgency || b.priority || 'normal').toLowerCase();
+      const diff = (urgencyRank[urgB] || 0) - (urgencyRank[urgA] || 0);
       if (diff !== 0) return diff;
       return new Date(b.receivedAt || b.createdAt) - new Date(a.receivedAt || a.createdAt);
     });
@@ -332,8 +342,9 @@ export default function IncomingConsultations() {
                 </thead>
                 <tbody>
                   {filteredConsultations.map((item) => {
-                    const isUrgent = ['critical', 'urgent'].includes(item.urgency);
-                    const isReviewed = ['response_available', 'completed'].includes(item.status);
+                    const urg = String(item.urgency || item.priority || 'normal').toLowerCase();
+                    const isUrgent = ['critical', 'urgent', 'emergency', 'high'].includes(urg);
+                    const isReviewed = ['response_available', 'response_submitted', 'completed', 'reviewed_by_doctor', 'response_received_by_clinic'].includes(item.status);
                     const progress = item.transferProgress || (item.status === 'delivered' ? 100 : item.status === 'partially_uploaded' ? 65 : 100);
 
                     return (
@@ -368,19 +379,19 @@ export default function IncomingConsultations() {
 
                         {/* Patient Name */}
                         <td style={{ padding: '14px 18px' }}>
-                          <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.patientName}</div>
-                          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {item.patientId}</div>
+                          <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.patientName || item.patient?.name || 'Patient'}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {item.patientId || item.patient?.id || item.patientReferenceId || '—'}</div>
                         </td>
 
                         {/* Age / Sex */}
                         <td style={{ padding: '14px 14px', color: '#334155' }}>
-                          {item.patientAge}y / {item.patientSex}
+                          {item.patientAge || item.patient?.age || '—'}y / {item.patientSex || item.patient?.sex || '—'}
                         </td>
 
                         {/* Clinic */}
                         <td style={{ padding: '14px 16px', color: '#475569' }}>
-                          <div>{item.clinicName}</div>
-                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>HW: {item.healthWorkerName}</div>
+                          <div>{item.clinicName || 'Rampur Primary Health Center'}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>HW: {item.healthWorkerName || 'Community Staff'}</div>
                         </td>
 
                         {/* Received */}
@@ -393,7 +404,7 @@ export default function IncomingConsultations() {
 
                         {/* Urgency */}
                         <td style={{ padding: '14px 14px' }}>
-                          <StatusBadge status={item.urgency} type="urgency" />
+                          <StatusBadge status={item.urgency || item.priority || 'normal'} type="urgency" />
                         </td>
 
                         {/* Transfer Status */}

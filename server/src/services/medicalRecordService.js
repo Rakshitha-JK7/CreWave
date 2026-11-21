@@ -229,7 +229,9 @@ class MedicalRecordService {
       );
 
       // Trigger asynchronous AI Image Restoration for clinical images
-      const isImg = att.mimeType.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.webp'].some(ext => att.fileName.endsWith(ext));
+      const safeName = String(att.fileName || att.file_name || att.filename || '').toLowerCase();
+      const isImg = (typeof att.mimeType === 'string' && att.mimeType.startsWith('image/')) ||
+                    ['.jpg', '.jpeg', '.png', '.webp'].some(ext => safeName.endsWith(ext));
       if (isImg) {
         setImmediate(async () => {
           try {

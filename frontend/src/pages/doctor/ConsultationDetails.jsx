@@ -700,11 +700,157 @@ export default function ConsultationDetails() {
                   No attachments in this consultation.
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* Visual Image Gallery for clinical images */}
+                  {consultation.attachments?.some(att => {
+                    const name = String(att?.name || att?.fileName || att?.file_name || '').toLowerCase();
+                    return att?.type === 'image' || att?.type === 'clinical_image' || att?.type === 'ecg' ||
+                           (typeof att?.mimeType === 'string' && att.mimeType.startsWith('image/')) ||
+                           ['.jpg', '.jpeg', '.png', '.webp', '.svg'].some(ext => name.endsWith(ext));
+                  }) && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: '0.825rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+                        Clinical Imagery &amp; Visual Evidence
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+                        {consultation.attachments
+                          .filter(att => {
+                            const name = String(att?.name || att?.fileName || att?.file_name || '').toLowerCase();
+                            return att?.type === 'image' || att?.type === 'clinical_image' || att?.type === 'ecg' ||
+                                   (typeof att?.mimeType === 'string' && att.mimeType.startsWith('image/')) ||
+                                   ['.jpg', '.jpeg', '.png', '.webp', '.svg'].some(ext => name.endsWith(ext));
+                          })
+                          .map(att => {
+                            const fileName = String(att?.name || att?.fileName || att?.file_name || 'Clinical Image');
+                            const imgUrl = att?.originalUrl || att?.url || `/api/medical-records/attachments/${att.id}/original`;
+                            const hasEnhanced = Boolean(att?.enhancedPreview);
+
+                            return (
+                              <div
+                                key={`card-${att.id}`}
+                                style={{
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: 12,
+                                  overflow: 'hidden',
+                                  backgroundColor: '#ffffff',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                }}
+                              >
+                                <div
+                                  style={{ position: 'relative', height: 180, backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                                  onClick={() => setSelectedAttachmentForViewer(att)}
+                                >
+                                  <img
+                                    src={imgUrl}
+                                    alt={fileName}
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                  />
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      top: 8,
+                                      left: 8,
+                                      backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                                      color: '#38bdf8',
+                                      backdropFilter: 'blur(4px)',
+                                      padding: '2px 8px',
+                                      borderRadius: 4,
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    Lossless Original
+                                  </div>
+                                  {hasEnhanced && (
+                                    <div
+                                      style={{
+                                        position: 'absolute',
+                                        top: 8,
+                                        right: 8,
+                                        backgroundColor: '#0284c7',
+                                        color: '#ffffff',
+                                        padding: '2px 8px',
+                                        borderRadius: 4,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 3,
+                                      }}
+                                    >
+                                      ✨ AI Preview
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                  <div>
+                                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.875rem', marginBottom: 2 }}>
+                                      {fileName}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                      SHA-256: <code style={{ color: '#0284c7' }}>{att.checksum ? `${att.checksum.slice(0, 12)}...` : 'Verified'}</code>
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedAttachmentForViewer(att)}
+                                      style={{
+                                        flex: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: 6,
+                                        padding: '6px 12px',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 600,
+                                        backgroundColor: '#0284c7',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: 6,
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      <Eye size={14} /> Compare Fullscreen
+                                    </button>
+                                    <a
+                                      href={imgUrl}
+                                      download={fileName}
+                                      style={{
+                                        padding: '6px 10px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        backgroundColor: '#f1f5f9',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: 6,
+                                        textDecoration: 'none',
+                                      }}
+                                      title="Download Original Bytes"
+                                    >
+                                      <Download size={14} />
+                                    </a>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: '0.825rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    All Attachment Files &amp; Records
+                  </div>
+
                   {(consultation.attachments || []).map((att) => {
-                    const fileName = String(att?.name || att?.fileName || att?.file_name || '');
+                    const fileName = String(att?.name || att?.fileName || att?.file_name || 'Attachment');
                     const lowerName = fileName.toLowerCase();
-                    const isImg = att?.type === 'image' || att?.type === 'clinical_image' || (typeof att?.mimeType === 'string' && att.mimeType.startsWith('image/')) || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.png') || lowerName.endsWith('.webp');
+                    const isImg = att?.type === 'image' || att?.type === 'clinical_image' || att?.type === 'ecg' || (typeof att?.mimeType === 'string' && att.mimeType.startsWith('image/')) || ['.jpg', '.jpeg', '.png', '.webp', '.svg'].some(ext => lowerName.endsWith(ext));
                     const isUploaded = att?.status === 'uploaded' || att?.uploadStatus === 'completed';
 
                     return (

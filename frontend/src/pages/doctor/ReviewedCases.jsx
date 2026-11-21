@@ -19,7 +19,7 @@ export default function ReviewedCases() {
       try {
         const data = await doctorService.getDoctorConsultations();
         if (mounted && Array.isArray(data)) {
-          setConsultations(data.filter((c) => ['response_available', 'completed', 'reviewed_by_doctor'].includes(c.status)));
+          setConsultations(data.filter((c) => ['response_available', 'completed', 'reviewed_by_doctor', 'response_submitted', 'response_received_by_clinic'].includes(c.status)));
         }
       } catch (err) {
         console.warn('Failed to load reviewed cases:', err);
@@ -102,17 +102,17 @@ export default function ReviewedCases() {
                     <tr key={c.id}>
                       <td style={{ fontWeight: 600, color: '#0284c7' }}>{c.id}</td>
                       <td>
-                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{c.patientName}</div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>{c.patientId}</div>
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{c.patientName || c.patient?.name || 'Patient'}</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>{c.patientId || c.patient?.id || c.patientReferenceId || '—'}</div>
                       </td>
                       <td style={{ maxWidth: 220, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {c.symptoms?.chiefComplaint || 'Consultation'}
+                        {c.chiefComplaint || c.mainComplaint || c.clinicalSummary?.mainComplaint || (typeof c.symptoms === 'object' ? c.symptoms?.chiefComplaint : c.symptoms) || 'General Consultation'}
                       </td>
                       <td style={{ fontSize: 13, color: '#64748b' }}>
                         {formatDate(c.updatedAt || c.createdAt)}
                       </td>
                       <td>
-                        <StatusBadge status={c.urgency} type="urgency" />
+                        <StatusBadge status={c.urgency || c.priority || 'normal'} type="urgency" />
                       </td>
                       <td>
                         <StatusBadge status={c.status} type="consultation" />

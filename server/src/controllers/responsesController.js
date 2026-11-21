@@ -35,9 +35,14 @@ class ResponsesController {
   async getPendingForClinic(req, res, next) {
     try {
       const { clinicId, healthWorkerId, since } = req.query;
+      const patientId = req.user && req.user.role === 'patient'
+        ? (req.user.name || req.user.patientId || req.user.referenceId || req.user.id)
+        : (req.query.patientId || null);
+
       const responses = await responseService.getPendingResponsesForClinic({
         clinicId: clinicId || (req.user ? req.user.clinicId : null),
         healthWorkerId: healthWorkerId || (req.user && req.user.role === 'health_worker' ? req.user.id : null),
+        patientId,
         since,
       });
 
