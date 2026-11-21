@@ -504,30 +504,30 @@ export default function ConsultationDetails() {
                 <div style={{ backgroundColor: '#f8fafc', padding: '12px 14px', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>DURATION</div>
                   <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1e293b', marginTop: 2 }}>
-                    {consultation.duration || '—'}
+                    {safeString(consultation.duration, '—')}
                   </div>
                 </div>
 
                 <div style={{ backgroundColor: '#f8fafc', padding: '12px 14px', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>ONSET</div>
                   <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1e293b', marginTop: 2 }}>
-                    {consultation.onset || '—'}
+                    {safeString(consultation.onset, '—')}
                   </div>
                 </div>
 
                 <div style={{ backgroundColor: '#f8fafc', padding: '12px 14px', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>SEVERITY</div>
                   <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#d97706', marginTop: 2 }}>
-                    {consultation.severity || '—'}
+                    {safeString(consultation.severity, '—')}
                   </div>
                 </div>
               </div>
 
               {/* Healthcare worker field observations */}
-              {consultation.notes && (
+              {Boolean(consultation.notes) && (
                 <div>
                   <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>
-                    Healthcare Worker Observations ({consultation.healthWorkerName || 'Clinic Staff'})
+                    Healthcare Worker Observations ({safeString(consultation.healthWorkerName, 'Clinic Staff')})
                   </div>
                   <div
                     style={{
@@ -540,7 +540,7 @@ export default function ConsultationDetails() {
                       lineHeight: 1.5,
                     }}
                   >
-                    "{consultation.notes}"
+                    "{safeString(consultation.notes, 'Observations recorded at clinic')}"
                   </div>
                 </div>
               )}
@@ -698,7 +698,8 @@ export default function ConsultationDetails() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {consultation.attachments.map((att) => {
-                    const isImg = att.type === 'image' || att.name.endsWith('.jpg') || att.name.endsWith('.png');
+                    const fileName = att.name || att.fileName || '';
+                    const isImg = att.type === 'image' || fileName.toLowerCase().endsWith('.jpg') || fileName.toLowerCase().endsWith('.png');
                     const isUploaded = att.status === 'uploaded';
 
                     return (
@@ -730,10 +731,10 @@ export default function ConsultationDetails() {
                           </div>
                           <div>
                             <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.875rem' }}>
-                              {att.name}
+                              {fileName || 'Attachment'}
                             </div>
                             <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                              {att.size} · {att.type?.toUpperCase()}
+                              {att.size || 'Unknown size'} · {String(att.type || 'FILE').toUpperCase()}
                             </div>
                           </div>
                         </div>
@@ -766,7 +767,7 @@ export default function ConsultationDetails() {
                           <button
                             onClick={() => {
                               if (isUploaded) {
-                                alert(`Downloading ${att.name}...`);
+                                alert(`Downloading ${fileName}...`);
                               } else {
                                 alert('Download available after full upload completes from clinic.');
                               }
@@ -869,7 +870,7 @@ export default function ConsultationDetails() {
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 20, fontSize: '0.825rem', color: '#b91c1c' }}>
                     {consultation.missingInfo.map((m, i) => (
-                      <li key={i}>{m}</li>
+                      <li key={i}>{typeof m === 'object' ? JSON.stringify(m) : String(m)}</li>
                     ))}
                   </ul>
                 </div>
@@ -1051,7 +1052,7 @@ export default function ConsultationDetails() {
                   borderBottom: '1px solid #e2e8f0',
                 }}
               >
-                <div style={{ fontWeight: 700, color: '#0f172a' }}>{previewImage.name}</div>
+                <div style={{ fontWeight: 700, color: '#0f172a' }}>{previewImage.name || previewImage.fileName || 'Attachment'}</div>
                 <button
                   onClick={() => setPreviewImage(null)}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
@@ -1077,7 +1078,7 @@ export default function ConsultationDetails() {
                     <Activity size={48} color="#0284c7" style={{ marginBottom: 12 }} />
                     <div style={{ fontWeight: 600 }}>Diagnostic Image Preview</div>
                     <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 4 }}>
-                      {previewImage.name} ({previewImage.size})
+                      {previewImage.name || previewImage.fileName || 'Attachment'} ({previewImage.size || 'Diagnostic Media'})
                     </div>
                   </div>
                 </div>
@@ -1143,7 +1144,7 @@ export default function ConsultationDetails() {
                   <CheckCircle size={48} style={{ margin: '0 auto 12px' }} />
                   <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Request Dispatched</div>
                   <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: 4 }}>
-                    The healthcare worker at {consultation.clinicName} has been queued for sync notification.
+                    The healthcare worker at {safeString(consultation.clinicName, 'the clinic')} has been queued for sync notification.
                   </div>
                 </div>
               ) : (

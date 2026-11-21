@@ -4,10 +4,10 @@
  * and low-bandwidth priority polling.
  */
 
-import { syncQueue } from '@communication/syncQueue';
-import { responseSync } from '@communication/responseSync';
-import { networkMonitor } from '@communication/networkMonitor';
-import { getPendingOutboxItems } from '@communication/localDB';
+import { syncQueue } from '../communication/syncQueue';
+import { responseSync } from '../communication/responseSync';
+import { networkMonitor } from '../communication/networkMonitor';
+import { getPendingOutboxItems } from '../communication/localDB';
 
 class SyncManager {
   constructor() {

@@ -10,8 +10,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@communication': path.resolve(__dirname, '../src/communication'),
-      'idb': path.resolve(__dirname, '../tests/mock-idb.js'),
+      '@communication': path.resolve(__dirname, 'src/communication'),
+      'idb': path.resolve(__dirname, 'src/offline/mock-idb.js'),
     },
   },
   server: {

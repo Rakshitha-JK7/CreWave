@@ -13,10 +13,10 @@ import {
   removeOutboxItem,
   saveDoctorResponse as dbSaveDoctorResponse,
   getDoctorResponses as dbGetDoctorResponses,
-} from '@communication/localDB';
-import { syncQueue } from '@communication/syncQueue';
-import { responseSync } from '@communication/responseSync';
-import { ComponentPriority, TransferState } from '@communication/constants';
+} from '../communication/localDB';
+import { syncQueue } from '../communication/syncQueue';
+import { responseSync } from '../communication/responseSync';
+import { ComponentPriority, TransferState } from '../communication/constants';
 
 /**
  * Saves a consultation locally to client database before any network transmission attempt

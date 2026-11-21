@@ -89,7 +89,7 @@ async function seed() {
     await db.run(
       `INSERT INTO patients (
         id, reference_id, name, age, date_of_birth, sex, village, contact_number, consent, created_by, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [
         internalPatientId,
         patientId,
@@ -142,7 +142,7 @@ async function seed() {
         CURRENT_TIMESTAMP, 'urgent', 'available_to_doctor', 'delivered',
         ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
-        ?, ?, ?, 1,
+        ?, ?, ?, TRUE,
         ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
       )`,
       [
@@ -162,7 +162,7 @@ async function seed() {
         'Mild tachypnea observed. Chest sounds clear on initial auscultation.',
         'Synthetic example record for software testing only',
         'Blood glucose and ECG device unavailable at remote post',
-        'Moderate / Urgent clinic protocol referral candidate',
+        'urgent',
         'Kept in well-ventilated room, advised hydration',
         JSON.stringify(sampleVitals),
       ]
