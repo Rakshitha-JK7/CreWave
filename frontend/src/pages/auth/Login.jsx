@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Heart, Lock, Mail, User, Eye, EyeOff, AlertCircle, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -6,7 +6,16 @@ import { useAuth } from '../../context/AuthContext';
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, currentUser } = useAuth();
+
+  useEffect(() => {
+    if (currentUser?.role) {
+      if (currentUser.role === 'admin') navigate('/admin', { replace: true });
+      else if (currentUser.role === 'doctor') navigate('/doctor', { replace: true });
+      else if (currentUser.role === 'health_worker') navigate('/health-worker', { replace: true });
+      else navigate('/patient', { replace: true });
+    }
+  }, [currentUser, navigate]);
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -167,14 +176,14 @@ export default function Login() {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.4rem' }}>
-              Username or Email
+              Username, Email or Patient ID
             </label>
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="doctor1, worker1, or user@example.com"
+                placeholder="doctor1, admin, user@example.com, or Meera-87263"
                 required
                 style={{
                   width: '100%',
@@ -204,15 +213,20 @@ export default function Login() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.4rem' }}>
-              Password
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>
+                Password or Registered Email
+              </label>
+              <span style={{ fontSize: '0.75rem', color: '#0284c7', fontWeight: 600 }}>
+                Patients: enter email
+              </span>
+            </div>
             <div style={{ position: 'relative' }}>
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
+                placeholder="Enter password (or email for registered patients)"
                 required
                 style={{
                   width: '100%',

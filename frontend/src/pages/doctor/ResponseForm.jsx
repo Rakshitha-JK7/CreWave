@@ -230,10 +230,14 @@ export default function ResponseForm() {
             <StatusBadge status={consultation?.urgency} type="urgency" />
           </div>
           <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>
-            Chief Complaint: {consultation?.symptoms?.chiefComplaint || consultation?.chiefComplaint}
+            Chief Complaint: {
+              typeof consultation?.chiefComplaint === 'string'
+                ? consultation.chiefComplaint
+                : (typeof consultation?.symptoms === 'object' ? (consultation?.symptoms?.chiefComplaint || 'Consultation') : (consultation?.symptoms || 'Consultation'))
+            }
           </div>
           <div style={{ fontSize: 13, color: '#64748b' }}>
-            Duration: {consultation?.symptoms?.duration} • Severity: {consultation?.symptoms?.severity} • Clinic: {consultation?.clinicName || 'Rampur PHC'}
+            Duration: {typeof consultation?.symptoms === 'object' ? (consultation?.symptoms?.duration || '—') : (consultation?.duration || '—')} • Severity: {typeof consultation?.symptoms === 'object' ? (consultation?.symptoms?.severity || '—') : (consultation?.severity || '—')} • Clinic: {consultation?.clinicName || 'Rampur PHC'}
           </div>
         </div>
 

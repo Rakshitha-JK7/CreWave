@@ -24,6 +24,19 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
+  const logout = useCallback(() => {
+    setToken(null);
+    setCurrentUser(null);
+    setAuthError(null);
+    try {
+      localStorage.removeItem('carewave_auth_token');
+      localStorage.removeItem('carewave_user');
+      delete api.defaults.headers.common['Authorization'];
+    } catch (e) {
+      console.error('Error clearing local storage on logout:', e);
+    }
+  }, []);
+
   // Initialize and verify session on mount
   useEffect(() => {
     const verifySession = async () => {
@@ -63,7 +76,7 @@ export function AuthProvider({ children }) {
     };
 
     verifySession();
-  }, []);
+  }, [logout]);
 
   const login = useCallback(async ({ email, username, password }) => {
     setAuthError(null);
@@ -133,19 +146,6 @@ export function AuthProvider({ children }) {
       const message = err.response?.data?.error || err.response?.data?.message || err.message || 'Registration failed.';
       setAuthError({ code, message });
       throw { code, message };
-    }
-  }, []);
-
-  const logout = useCallback(() => {
-    setToken(null);
-    setCurrentUser(null);
-    setAuthError(null);
-    try {
-      localStorage.removeItem('carewave_auth_token');
-      localStorage.removeItem('carewave_user');
-      delete api.defaults.headers.common['Authorization'];
-    } catch (e) {
-      console.error('Error clearing local storage on logout:', e);
     }
   }, []);
 

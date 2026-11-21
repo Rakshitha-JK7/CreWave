@@ -127,7 +127,7 @@ export default function PatientRecords() {
                         <div style={{ fontWeight: 600, color: '#0f172a' }}>{patient.name}</div>
                         <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                           <span style={{ fontWeight: 600, color: '#b91c1c', background: '#fef2f2', padding: '1px 6px', borderRadius: 4 }}>
-                            Blood: {patient.bloodGroup || 'Unknown'}
+                            Blood: {patient.bloodGroup || patient.blood_group || 'Unknown'}
                           </span>
                           {patient.conditions?.length > 0 && (
                             <span>• {patient.conditions.slice(0, 2).join(', ')}</span>
@@ -165,7 +165,7 @@ export default function PatientRecords() {
                             className="btn btn-primary btn-sm"
                             onClick={() =>
                               navigate('/health-worker/new-consultation', {
-                                state: { patientId: patient.id },
+                                state: { patientId: patient.referenceId || patient.id },
                               })
                             }
                             title="Start New Consultation"
@@ -215,7 +215,7 @@ export default function PatientRecords() {
                   <div>
                     <h4 style={{ margin: 0, fontSize: 18, color: '#0f172a' }}>{selectedPatient.name}</h4>
                     <span style={{ fontSize: 13, color: '#64748b' }}>
-                      {selectedPatient.referenceId || selectedPatient.id} • {selectedPatient.age} yrs • {selectedPatient.sex} • <strong style={{ color: '#b91c1c' }}>Blood: {selectedPatient.bloodGroup || 'Unknown'}</strong>
+                      {selectedPatient.referenceId || selectedPatient.id} • {selectedPatient.age} yrs • {selectedPatient.sex} • <strong style={{ color: '#b91c1c' }}>Blood: {selectedPatient.bloodGroup || selectedPatient.blood_group || 'Unknown'}</strong>
                     </span>
                   </div>
                 </div>

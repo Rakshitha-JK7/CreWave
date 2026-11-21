@@ -28,10 +28,14 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [pendingUsers, setPendingUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'users'
+  const [allConsultations, setAllConsultations] = useState([]);
+  const [allPatients, setAllPatients] = useState([]);
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'users' | 'consultations' | 'patients'
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [consultationSearchTerm, setConsultationSearchTerm] = useState('');
+  const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [toast, setToast] = useState(null);
 
   const showToast = (message, type = 'success') => {
@@ -42,15 +46,19 @@ export default function AdminDashboard() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [statsRes, pendingRes, usersRes] = await Promise.all([
+      const [statsRes, pendingRes, usersRes, consRes, patientsRes] = await Promise.all([
         api.get('/admin/stats').catch(() => ({ data: { data: {} } })),
         api.get('/admin/pending-users').catch(() => ({ data: { data: [] } })),
         api.get('/admin/users').catch(() => ({ data: { data: [] } })),
+        api.get('/consultations').catch(() => ({ data: { data: [] } })),
+        api.get('/patients').catch(() => ({ data: { data: [] } })),
       ]);
 
       setStats(statsRes.data?.data || {});
       setPendingUsers(pendingRes.data?.data || []);
       setAllUsers(usersRes.data?.data || []);
+      setAllConsultations(Array.isArray(consRes.data) ? consRes.data : (consRes.data?.data || []));
+      setAllPatients(Array.isArray(patientsRes.data) ? patientsRes.data : (patientsRes.data?.data || []));
     } catch (err) {
       console.error('Error loading admin dashboard data:', err);
       showToast('Could not refresh admin data. Check network connection.', 'error');
@@ -394,7 +402,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Tab Controls */}
-        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={() => setActiveTab('pending')}
@@ -443,6 +451,40 @@ export default function AdminDashboard() {
             }}
           >
             All Accounts Directory ({allUsers.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('consultations')}
+            style={{
+              padding: '0.65rem 1.25rem',
+              borderRadius: 10,
+              border: 'none',
+              background: activeTab === 'consultations' ? '#0f172a' : '#e2e8f0',
+              color: activeTab === 'consultations' ? '#ffffff' : '#475569',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+            }}
+          >
+            Clinical Consultations ({allConsultations.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('patients')}
+            style={{
+              padding: '0.65rem 1.25rem',
+              borderRadius: 10,
+              border: 'none',
+              background: activeTab === 'patients' ? '#0f172a' : '#e2e8f0',
+              color: activeTab === 'patients' ? '#ffffff' : '#475569',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+            }}
+          >
+            Registered Patients ({allPatients.length})
           </button>
         </div>
 
@@ -649,6 +691,7 @@ export default function AdminDashboard() {
                     <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Status</th>
                     <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Details</th>
                     <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Registered</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700, textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -720,8 +763,311 @@ export default function AdminDashboard() {
                       <td style={{ padding: '0.85rem 1.25rem', fontSize: '0.8rem', color: '#64748b' }}>
                         {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
                       </td>
+                      <td style={{ padding: '0.85rem 1.25rem', textAlign: 'right' }}>
+                        {u.role !== 'admin' && (
+                          u.status === 'active' ? (
+                            <button
+                              type="button"
+                              disabled={actionLoadingId === u.id}
+                              onClick={() => handleReject(u.id, u.name)}
+                              style={{
+                                padding: '0.35rem 0.65rem',
+                                borderRadius: 6,
+                                border: '1px solid #fecaca',
+                                background: '#fef2f2',
+                                color: '#dc2626',
+                                fontSize: '0.78rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Suspend
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={actionLoadingId === u.id}
+                              onClick={() => handleApprove(u.id, u.name)}
+                              style={{
+                                padding: '0.35rem 0.65rem',
+                                borderRadius: 6,
+                                border: 'none',
+                                background: '#16a34a',
+                                color: '#ffffff',
+                                fontSize: '0.78rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Activate
+                            </button>
+                          )
+                        )}
+                      </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Section: Clinical Consultations */}
+        {activeTab === 'consultations' && (
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: 16,
+              border: '1px solid #e2e8f0',
+              overflow: 'hidden',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+            }}
+          >
+            <div
+              style={{
+                padding: '1.25rem 1.5rem',
+                borderBottom: '1px solid #f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '1rem',
+              }}
+            >
+              <div>
+                <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.25rem' }}>
+                  Cross-Clinic Telemedicine Consultations
+                </h2>
+                <p style={{ fontSize: '0.84rem', color: '#64748b', margin: 0 }}>
+                  Live overview of all active, reviewed, and completed clinical telemetry cases.
+                </p>
+              </div>
+
+              <div style={{ position: 'relative', width: 280 }}>
+                <input
+                  type="text"
+                  value={consultationSearchTerm}
+                  onChange={(e) => setConsultationSearchTerm(e.target.value)}
+                  placeholder="Filter by case ID, patient, chief complaint..."
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.85rem 0.6rem 2.2rem',
+                    borderRadius: 8,
+                    border: '1.5px solid #cbd5e1',
+                    fontSize: '0.85rem',
+                    boxSizing: 'border-box',
+                    outline: 'none',
+                  }}
+                />
+                <Search
+                  size={15}
+                  color="#94a3b8"
+                  style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Case ID</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Patient</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Specialization / Doctor</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Chief Complaint</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Urgency</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Status</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allConsultations
+                    .filter((c) => {
+                      if (!consultationSearchTerm.trim()) return true;
+                      const q = consultationSearchTerm.toLowerCase();
+                      const complaint = c.mainComplaint || c.clinicalSummary?.mainComplaint || (typeof c.symptoms === 'object' ? c.symptoms?.chiefComplaint : c.symptoms) || '';
+                      return (
+                        c.id?.toLowerCase().includes(q) ||
+                        c.patientName?.toLowerCase().includes(q) ||
+                        c.patientId?.toLowerCase().includes(q) ||
+                        complaint.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((c) => (
+                      <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 700, color: '#0284c7' }}>
+                          {c.id}
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem' }}>
+                          <div style={{ fontWeight: 600, color: '#0f172a' }}>{c.patientName || 'Patient'}</div>
+                          <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{c.patientId}</div>
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem', fontSize: '0.82rem', color: '#334155' }}>
+                          <div style={{ fontWeight: 600 }}>{c.specialization || 'General Medicine'}</div>
+                          <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{c.doctorName || 'Any Specialist'}</div>
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#475569' }}>
+                          {c.mainComplaint || c.clinicalSummary?.mainComplaint || (typeof c.symptoms === 'object' ? c.symptoms?.chiefComplaint : c.symptoms) || 'General Consultation'}
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem' }}>
+                          <span
+                            style={{
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: 6,
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              background: ['urgent', 'emergency', 'critical'].includes(c.priority || c.urgency) ? '#fee2e2' : '#f0fdf4',
+                              color: ['urgent', 'emergency', 'critical'].includes(c.priority || c.urgency) ? '#b91c1c' : '#15803d',
+                            }}
+                          >
+                            {c.priority || c.urgency || 'Normal'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem' }}>
+                          <span
+                            style={{
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: 6,
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              background: '#eff6ff',
+                              color: '#1d4ed8',
+                            }}
+                          >
+                            {c.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem', fontSize: '0.8rem', color: '#64748b' }}>
+                          {c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Section: Registered Patients */}
+        {activeTab === 'patients' && (
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: 16,
+              border: '1px solid #e2e8f0',
+              overflow: 'hidden',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+            }}
+          >
+            <div
+              style={{
+                padding: '1.25rem 1.5rem',
+                borderBottom: '1px solid #f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '1rem',
+              }}
+            >
+              <div>
+                <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.25rem' }}>
+                  Registered Patients Clinical Registry
+                </h2>
+                <p style={{ fontSize: '0.84rem', color: '#64748b', margin: 0 }}>
+                  Demographics, blood groups, and verified contact information registered across rural health posts.
+                </p>
+              </div>
+
+              <div style={{ position: 'relative', width: 280 }}>
+                <input
+                  type="text"
+                  value={patientSearchTerm}
+                  onChange={(e) => setPatientSearchTerm(e.target.value)}
+                  placeholder="Filter by ID, name, village, blood group..."
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.85rem 0.6rem 2.2rem',
+                    borderRadius: 8,
+                    border: '1.5px solid #cbd5e1',
+                    fontSize: '0.85rem',
+                    boxSizing: 'border-box',
+                    outline: 'none',
+                  }}
+                />
+                <Search
+                  size={15}
+                  color="#94a3b8"
+                  style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Patient ID</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Full Name</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Age / Sex</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Village & Location</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Blood Group</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Contact Phone</th>
+                    <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700 }}>Registered</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allPatients
+                    .filter((p) => {
+                      if (!patientSearchTerm.trim()) return true;
+                      const q = patientSearchTerm.toLowerCase();
+                      return (
+                        p.name?.toLowerCase().includes(q) ||
+                        p.id?.toLowerCase().includes(q) ||
+                        p.referenceId?.toLowerCase().includes(q) ||
+                        p.reference_id?.toLowerCase().includes(q) ||
+                        p.village?.toLowerCase().includes(q) ||
+                        p.bloodGroup?.toLowerCase().includes(q) ||
+                        p.blood_group?.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((p) => (
+                      <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 700, color: '#0284c7' }}>
+                          {p.referenceId || p.reference_id || p.id}
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem', fontWeight: 700, color: '#0f172a' }}>
+                          {p.name}
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem', color: '#334155' }}>
+                          {p.age} yrs / {p.sex}
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem', color: '#475569' }}>
+                          {p.village}{p.district ? `, ${p.district}` : ''}
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem' }}>
+                          <span
+                            style={{
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: 6,
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              background: '#fef2f2',
+                              color: '#b91c1c',
+                            }}
+                          >
+                            {p.bloodGroup || p.blood_group || 'Unknown'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem', color: '#64748b', fontSize: '0.82rem' }}>
+                          {p.phone || p.contactNumber || p.contact_number || '—'}
+                        </td>
+                        <td style={{ padding: '0.85rem 1.25rem', fontSize: '0.8rem', color: '#64748b' }}>
+                          {p.createdAt || p.created_at ? new Date(p.createdAt || p.created_at).toLocaleDateString() : '—'}
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>

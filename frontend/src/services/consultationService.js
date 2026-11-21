@@ -4,6 +4,7 @@ import {
   saveConsultation as dbSaveConsultation,
   getConsultation as dbGetConsultation,
   getAllConsultations as dbGetAllConsultations,
+  getDraftConsultations as dbGetDraftConsultations,
 } from '../offline/indexedDB';
 import { enqueueConsultation, getTransferStatus } from '../offline/offlineQueue';
 
@@ -87,17 +88,31 @@ export const consultationService = {
       console.warn('API consultation list error or offline:', err.message);
     }
 
-    // Always fetch local and drafted consultations from client IndexedDB
+    // Always fetch local and drafted consultations from client IndexedDB and localStorage
     let localList = [];
+    let draftList = [];
     try {
-      localList = await dbGetAllConsultations();
+      const [allCons, allDrafts] = await Promise.all([
+        dbGetAllConsultations().catch(() => []),
+        dbGetDraftConsultations().catch(() => []),
+      ]);
+      localList = allCons || [];
+      draftList = allDrafts || [];
     } catch (e) {
       console.warn('Could not read local consultations from IndexedDB:', e);
     }
 
-    // Merge server consultations and local offline/draft consultations
+    let localDrafts = [];
+    try {
+      localDrafts = JSON.parse(localStorage.getItem('carewave_drafts') || '[]');
+    } catch {
+      localDrafts = [];
+    }
+
+    // Merge server consultations, local consultations, and drafts
     const combined = [...serverList];
-    (localList || []).forEach((c) => {
+    [...(localList || []), ...(draftList || []), ...localDrafts].forEach((c) => {
+      if (!c || !c.id) return;
       const idx = combined.findIndex((item) => item.id === c.id);
       if (idx !== -1) {
         combined[idx] = { ...combined[idx], ...c };

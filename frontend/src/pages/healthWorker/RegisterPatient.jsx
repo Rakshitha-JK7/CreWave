@@ -12,6 +12,7 @@ export default function RegisterPatient() {
 
   const [formData, setFormData] = useState({
     name: '',
+    email: '',
     age: '',
     sex: 'Male',
     phone: '',
@@ -125,6 +126,7 @@ export default function RegisterPatient() {
   const handleReset = () => {
     setFormData({
       name: '',
+      email: '',
       age: '',
       sex: 'Male',
       phone: '',
@@ -268,6 +270,21 @@ export default function RegisterPatient() {
                     onChange={handleInputChange}
                   />
                   {errors.phone && <div className="form-error">{errors.phone}</div>}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Patient Email ID (For Portal Login)</label>
+                  <input
+                    type="email"
+                    name="email"
+                    className="form-control"
+                    placeholder="e.g. patient@gmail.com"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                    Used with Patient ID for patient portal login.
+                  </span>
                 </div>
 
                 <div className="form-group">

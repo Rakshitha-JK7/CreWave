@@ -58,20 +58,36 @@ class AdminController {
 
   async getSystemStats(req, res, next) {
     try {
-      const usersCount = await db.get('SELECT COUNT(*) as count FROM users');
-      const patientsCount = await db.get('SELECT COUNT(*) as count FROM patients');
-      const consultationsCount = await db.get('SELECT COUNT(*) as count FROM consultations');
-      const responsesCount = await db.get('SELECT COUNT(*) as count FROM doctor_responses');
-      const pendingUsersCount = await db.get("SELECT COUNT(*) as count FROM users WHERE status = 'pending'");
+      const [usersCount, patientsCount, consultationsCount, responsesCount, pendingUsersCount, doctorsCount, hwCount] = await Promise.all([
+        db.get('SELECT COUNT(*) as count FROM users'),
+        db.get('SELECT COUNT(*) as count FROM patients'),
+        db.get('SELECT COUNT(*) as count FROM consultations'),
+        db.get('SELECT COUNT(*) as count FROM doctor_responses'),
+        db.get("SELECT COUNT(*) as count FROM users WHERE status = 'pending'"),
+        db.get("SELECT COUNT(*) as count FROM users WHERE role = 'doctor'"),
+        db.get("SELECT COUNT(*) as count FROM users WHERE role = 'health_worker'"),
+      ]);
+
+      const users = Number(usersCount?.count || 0);
+      const pendingApprovals = Number(pendingUsersCount?.count || 0);
+      const patients = Number(patientsCount?.count || 0);
+      const consultations = Number(consultationsCount?.count || 0);
+      const responses = Number(responsesCount?.count || 0);
+      const doctors = Number(doctorsCount?.count || 0);
+      const healthWorkers = Number(hwCount?.count || 0);
 
       res.status(200).json({
         success: true,
         data: {
-          users: usersCount?.count || 0,
-          pendingApprovals: pendingUsersCount?.count || 0,
-          patients: patientsCount?.count || 0,
-          consultations: consultationsCount?.count || 0,
-          responses: responsesCount?.count || 0,
+          users,
+          totalUsers: users,
+          pendingApprovals,
+          patients,
+          consultations,
+          totalConsultations: consultations,
+          responses,
+          doctors,
+          healthWorkers,
           databaseType: db.getType(),
         },
       });

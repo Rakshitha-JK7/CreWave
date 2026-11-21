@@ -43,9 +43,10 @@ export default function PatientConsultations() {
 
   const filtered = consultations.filter((c) => {
     const q = searchQuery.toLowerCase();
+    const complaint = (typeof c.symptoms === 'object' ? c.symptoms?.chiefComplaint : c.symptoms) || c.mainComplaint || '';
     const matchesSearch =
       c.id?.toLowerCase().includes(q) ||
-      c.symptoms?.chiefComplaint?.toLowerCase().includes(q);
+      complaint.toLowerCase().includes(q);
 
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -110,7 +111,7 @@ export default function PatientConsultations() {
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-                          {c.symptoms?.chiefComplaint || 'Consultation'}
+                          {typeof c.symptoms === 'object' ? (c.symptoms?.chiefComplaint || c.mainComplaint || 'Consultation') : (c.symptoms || c.mainComplaint || 'Consultation')}
                         </span>
                         <span style={{ fontSize: 12, fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '2px 8px', borderRadius: 6 }}>
                           Case #{c.id}
@@ -196,7 +197,9 @@ export default function PatientConsultations() {
                 <div style={{ background: '#f8fafc', padding: 14, borderRadius: 8, marginBottom: 16 }}>
                   <span style={{ fontSize: 12, color: '#64748b', textTransform: 'uppercase' }}>Symptoms</span>
                   <div style={{ fontWeight: 600, fontSize: 15, color: '#0f172a', marginTop: 4 }}>
-                    {selectedCase.symptoms?.chiefComplaint}
+                    {typeof selectedCase.symptoms === 'object'
+                      ? (selectedCase.symptoms?.chiefComplaint || selectedCase.mainComplaint || 'No symptoms specified')
+                      : (selectedCase.symptoms || selectedCase.mainComplaint || 'No symptoms specified')}
                   </div>
                   <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
                     Duration: {selectedCase.symptoms?.duration} • Severity: {selectedCase.symptoms?.severity}

@@ -203,24 +203,77 @@ class AuthService {
       throw err;
     }
 
-    const user = await db.get(
+    let user = await db.get(
       `SELECT id, username, email, password_hash, name, role, status, clinic_id,
               contact_number, specialization, license_number, created_at
        FROM users
-       WHERE username = ? OR email = ?`,
+       WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)`,
       [identifier, identifier]
     );
 
-    if (!user) {
-      const err = new Error('Invalid credentials.');
-      err.statusCode = 401;
-      err.code = 'INVALID_CREDENTIALS';
-      throw err;
+    let isMatch = false;
+
+    if (user) {
+      // 1. Standard bcrypt password comparison
+      isMatch = await bcrypt.compare(password, user.password_hash).catch(() => false);
+
+      // 2. If password didn't match via bcrypt, check if user is a patient whose password is their email or username/referenceId
+      if (!isMatch && user.role === 'patient') {
+        const cleanPass = password.trim().toLowerCase();
+        if (
+          (user.email && user.email.toLowerCase() === cleanPass) ||
+          (user.username && user.username.toLowerCase() === cleanPass)
+        ) {
+          isMatch = true;
+        }
+      }
     }
 
-    const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) {
-      const err = new Error('Invalid credentials.');
+    // 3. If user not found in users table or password didn't match, check patients table
+    if (!user || !isMatch) {
+      const patientMatch = await db.get(
+        `SELECT id, reference_id, user_id, name, email, village, contact_number, blood_group
+         FROM patients
+         WHERE LOWER(reference_id) = LOWER(?) OR LOWER(email) = LOWER(?) OR LOWER(id) = LOWER(?)`,
+        [identifier, identifier, identifier]
+      );
+
+      if (patientMatch) {
+        const cleanPass = password.trim().toLowerCase();
+        const pEmail = (patientMatch.email || '').trim().toLowerCase();
+        const pRef = (patientMatch.reference_id || '').trim().toLowerCase();
+
+        // If password matches either the patient's registered email OR reference ID
+        if ((pEmail && cleanPass === pEmail) || (pRef && cleanPass === pRef)) {
+          isMatch = true;
+          if (patientMatch.user_id) {
+            user = await db.get('SELECT * FROM users WHERE id = ?', [patientMatch.user_id]);
+          }
+          if (!user) {
+            const userUuid = patientMatch.user_id || `U-${uuidv4()}`;
+            const pwdHash = await bcrypt.hash(pEmail || pRef, 10);
+            await db.run(
+              `INSERT INTO users (id, username, email, password_hash, name, role, status, contact_number, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, 'patient', 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+              [userUuid, patientMatch.reference_id, patientMatch.email || `${pRef}@carewave.patient`, pwdHash, patientMatch.name || 'Patient', patientMatch.contact_number]
+            );
+            user = {
+              id: userUuid,
+              username: patientMatch.reference_id,
+              email: patientMatch.email || `${pRef}@carewave.patient`,
+              name: patientMatch.name || 'Patient',
+              role: 'patient',
+              status: 'active',
+              contact_number: patientMatch.contact_number,
+            };
+            await db.run('UPDATE patients SET user_id = ? WHERE id = ?', [userUuid, patientMatch.id]);
+          }
+        }
+      }
+    }
+
+    if (!user || !isMatch) {
+      const err = new Error('Invalid credentials. Patients may sign in using their Patient ID and registered Email.');
       err.statusCode = 401;
       err.code = 'INVALID_CREDENTIALS';
       throw err;
@@ -254,8 +307,8 @@ class AuthService {
     let linkedPatient = null;
     if (user.role === 'patient') {
       linkedPatient = await db.get(
-        'SELECT id, reference_id as "referenceId", village, age, sex, blood_group as "bloodGroup" FROM patients WHERE user_id = ? OR id = ? OR reference_id = ?',
-        [user.id, user.id, user.id]
+        'SELECT id, reference_id as "referenceId", village, age, sex, blood_group as "bloodGroup" FROM patients WHERE user_id = ? OR id = ? OR reference_id = ? OR reference_id = ?',
+        [user.id, user.id, user.id, user.username]
       );
     }
 
@@ -299,8 +352,8 @@ class AuthService {
     let linkedPatient = null;
     if (user.role === 'patient') {
       linkedPatient = await db.get(
-        'SELECT id, reference_id as "referenceId", village, age, sex, blood_group as "bloodGroup" FROM patients WHERE user_id = ? OR id = ?',
-        [user.id, user.id]
+        'SELECT id, reference_id as "referenceId", village, age, sex, blood_group as "bloodGroup" FROM patients WHERE user_id = ? OR id = ? OR reference_id = ? OR reference_id = ?',
+        [user.id, user.id, user.id, user.username]
       );
     }
 

@@ -13,7 +13,7 @@ import patientService from '../../services/patientService'
 import consultationService from '../../services/consultationService'
 import { validateConsultation } from '../../utils/validation'
 import { enqueueConsultation } from '../../offline/offlineQueue'
-import { saveConsultation, getDraftConsultations, deleteDraft } from '../../offline/indexedDB'
+import { saveConsultation, saveDraft, getDraftConsultations, deleteDraft } from '../../offline/indexedDB'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -468,9 +468,11 @@ export default function NewConsultation() {
 
   const selectPatient = useCallback((patient) => {
     setSelectedPatient(patient)
+    const pId = patient.referenceId || patient.reference_id || patient.id || patient.patientId;
     setFormData(prev => ({
       ...prev,
-      patientId: patient.id || patient.patientId,
+      patientId: pId,
+      patientName: patient.name || `${patient.firstName || ''} ${patient.lastName || ''}`.trim(),
       medicalHistory: {
         ...prev.medicalHistory,
         existingConditions: patient.medicalHistory?.conditions || patient.conditions || [],
@@ -493,12 +495,27 @@ export default function NewConsultation() {
     }
     loadPatientsList()
 
-    // Check for draft in IndexedDB
+    // Check for draft in IndexedDB or localStorage
     const checkDraft = async () => {
       try {
-        const drafts = await getDraftConsultations()
-        if (drafts && drafts.length > 0 && mounted) {
-          setDraftBanner(drafts[0])
+        const preselectedDraftId = location.state?.draftId;
+        const drafts = await getDraftConsultations();
+        let localDrafts = [];
+        try {
+          localDrafts = JSON.parse(localStorage.getItem('carewave_drafts') || '[]');
+        } catch { localDrafts = []; }
+        const allDrafts = [...(drafts || []), ...localDrafts];
+
+        if (preselectedDraftId) {
+          const specificDraft = allDrafts.find((d) => d.id === preselectedDraftId);
+          if (specificDraft && mounted) {
+            setDraftBanner(specificDraft);
+            return;
+          }
+        }
+
+        if (allDrafts.length > 0 && mounted) {
+          setDraftBanner(allDrafts[0]);
         }
       } catch {
         // IndexedDB not available or no drafts
@@ -635,25 +652,28 @@ export default function NewConsultation() {
 
   const validate = () => {
     const newErrors = {}
-    if (!formData.patientId) newErrors.patientId = 'Please select a patient.'
-    if (!formData.symptoms.chiefComplaint.trim()) newErrors.chiefComplaint = 'Chief complaint is required.'
-    if (!formData.symptoms.duration.trim()) newErrors.duration = 'Duration is required.'
-
-    // Custom validation from util if available
-    try {
-      const utilErrors = validateConsultation?.(formData) || {}
-      Object.assign(newErrors, utilErrors)
-    } catch {
-      // Validation util may not exist yet
+    if (!formData.patientId) {
+      newErrors.patientId = 'Please select a patient from Section A.'
+    }
+    const chiefComplaint = (formData.symptoms?.chiefComplaint || '').trim()
+    if (!chiefComplaint) {
+      newErrors.chiefComplaint = 'Chief complaint is required in Section B.'
+    } else if (chiefComplaint.length < 3) {
+      newErrors.chiefComplaint = 'Chief complaint must be at least 3 characters.'
     }
 
     setErrors(newErrors)
+
     if (Object.keys(newErrors).length > 0) {
+      const errorList = Object.values(newErrors)
+      showToast(`Cannot submit: ${errorList.join(' • ')}`, 'error')
+
       // Scroll to first error section
       if (newErrors.patientId) scrollToSection('section-a')
-      else if (newErrors.chiefComplaint || newErrors.duration) scrollToSection('section-b')
+      else if (newErrors.chiefComplaint) scrollToSection('section-b')
+      return false
     }
-    return Object.keys(newErrors).length === 0
+    return true
   }
 
   // ── Draft save ─────────────────────────────────────────────────────────────
@@ -678,7 +698,17 @@ export default function NewConsultation() {
           : (formData.patientName || 'Patient Draft'),
         mainComplaint: formData.symptoms?.chiefComplaint || 'Draft Consultation',
       }
-      await saveConsultation(draftRecord)
+      await saveConsultation(draftRecord);
+      await saveDraft(draftRecord);
+      try {
+        const draftsList = JSON.parse(localStorage.getItem('carewave_drafts') || '[]');
+        const existingIdx = draftsList.findIndex((d) => d.id === draftRecord.id);
+        if (existingIdx !== -1) draftsList[existingIdx] = draftRecord;
+        else draftsList.unshift(draftRecord);
+        localStorage.setItem('carewave_drafts', JSON.stringify(draftsList));
+      } catch (e) {
+        console.warn('Could not cache draft in localStorage:', e);
+      }
       setIsDraftSaved(true)
       showToast('Draft consultation saved locally and added to history', 'success')
     } catch {
@@ -724,7 +754,6 @@ export default function NewConsultation() {
 
   const handleSubmit = async () => {
     if (!validate()) {
-      showToast('Please fix the errors before submitting.', 'error')
       return
     }
 
@@ -790,7 +819,9 @@ export default function NewConsultation() {
 
       // Discard any existing draft record from storage
       try {
-        await deleteDraft(consultationId)
+        await deleteDraft(consultationId);
+        const draftsList = JSON.parse(localStorage.getItem('carewave_drafts') || '[]');
+        localStorage.setItem('carewave_drafts', JSON.stringify(draftsList.filter((d) => d.id !== consultationId)));
       } catch (e) { /* ignore */ }
 
       setSubmitStatus('queued')
@@ -918,6 +949,32 @@ export default function NewConsultation() {
           </div>
         )}
 
+        {/* Validation Errors Summary Banner */}
+        {Object.keys(errors).filter(k => errors[k]).length > 0 && (
+          <div
+            style={{
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderLeft: '5px solid #dc2626',
+              borderRadius: 8,
+              padding: '12px 18px',
+              marginBottom: 20,
+              color: '#991b1b',
+              fontSize: '0.875rem',
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <AlertCircle size={18} color="#dc2626" />
+              Please complete all required consultation fields before submitting:
+            </div>
+            <ul style={{ margin: 0, paddingLeft: 24, lineHeight: 1.5 }}>
+              {Object.entries(errors).filter(([, errText]) => errText).map(([k, errText]) => (
+                <li key={k}>{errText}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div style={styles.formContainer}>
 
           {/* ═══ SECTION A: Patient Selection ═══════════════════════════════ */}
@@ -929,19 +986,24 @@ export default function NewConsultation() {
                   <select
                     value={formData.patientId}
                     onChange={e => {
-                      const patient = patients.find(p => (p.id || p.patientId) === e.target.value)
+                      const val = e.target.value
+                      const patient = patients.find(p => (p.referenceId || p.reference_id || p.id || p.patientId) === val)
                       if (patient) selectPatient(patient)
                       else { setSelectedPatient(null); setFormData(prev => ({ ...prev, patientId: '' })) }
                       if (errors.patientId) setErrors(prev => ({ ...prev, patientId: '' }))
                     }}
                     style={{ ...styles.select, borderColor: errors.patientId ? '#dc2626' : '#e2e8f0' }}
                   >
-                    <option value="">— Select a patient —</option>
-                    {patients.map(p => (
-                      <option key={p.id || p.patientId} value={p.id || p.patientId}>
-                        {p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim()} — {p.id || p.patientId}
-                      </option>
-                    ))}
+                    <option value="">— Select a registered patient —</option>
+                    {patients.map(p => {
+                      const pid = p.referenceId || p.reference_id || p.id || p.patientId;
+                      const bg = p.bloodGroup || p.blood_group || '';
+                      return (
+                        <option key={pid} value={pid}>
+                          {p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim()} — {pid} {bg ? `[${bg}]` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                   <ChevronDown size={16} style={styles.selectIcon} />
                 </div>
@@ -1416,6 +1478,36 @@ export default function NewConsultation() {
             </div>
           </div>
         </div>
+
+        {/* Validation Errors Notice */}
+        {Object.keys(errors).length > 0 && (
+          <div
+            style={{
+              maxWidth: 900,
+              margin: '0 auto 16px',
+              padding: '12px 18px',
+              backgroundColor: '#fef2f2',
+              border: '1.5px solid #fecaca',
+              borderRadius: 10,
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 12,
+              color: '#991b1b',
+              fontSize: '0.875rem',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.1)',
+            }}
+          >
+            <AlertCircle size={20} style={{ flexShrink: 0, marginTop: 2, color: '#dc2626' }} />
+            <div style={{ flex: 1 }}>
+              <strong style={{ fontSize: '0.9rem' }}>Please complete the following required fields:</strong>
+              <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
+                {Object.entries(errors).map(([key, msg]) => (
+                  <li key={key} style={{ marginTop: 2 }}>{msg}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
 
         {/* ── Sticky Bottom Action Bar ────────────────────────────────────── */}
         <div style={styles.actionBar}>

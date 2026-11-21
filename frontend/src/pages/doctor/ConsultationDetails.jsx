@@ -33,6 +33,17 @@ import VitalCard from '../../components/VitalCard';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDate, formatDateTime, formatRelative } from '../../utils/formatDate';
 
+function safeString(val, fallback = '—') {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'object') {
+    if (val.text) return String(val.text);
+    if (val.description) return String(val.description);
+    if (val.name) return String(val.name);
+    return fallback;
+  }
+  return String(val);
+}
+
 export default function ConsultationDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -308,10 +319,16 @@ export default function ConsultationDetails() {
                 <div>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>EMERGENCY CONTACT</div>
                   <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b' }}>
-                    {patient.emergencyContact?.name} ({patient.emergencyContact?.relation || 'Kin'})
-                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                      {patient.emergencyContact?.phone}
-                    </div>
+                    {typeof patient.emergencyContact === 'string'
+                      ? patient.emergencyContact
+                      : patient.emergencyContact?.name
+                        ? `${patient.emergencyContact.name} (${patient.emergencyContact.relation || 'Kin'})`
+                        : 'None documented'}
+                    {typeof patient.emergencyContact === 'object' && patient.emergencyContact?.phone && (
+                      <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                        {patient.emergencyContact.phone}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -322,8 +339,8 @@ export default function ConsultationDetails() {
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginRight: 8 }}>
                     Pre-existing Conditions:
                   </span>
-                  {patient.conditions && patient.conditions.length > 0 ? (
-                    patient.conditions.map((cond, idx) => (
+                  {(Array.isArray(patient.conditions) ? patient.conditions : typeof patient.conditions === 'string' && patient.conditions ? patient.conditions.split(', ') : []).length > 0 ? (
+                    (Array.isArray(patient.conditions) ? patient.conditions : patient.conditions.split(', ')).map((cond, idx) => (
                       <span
                         key={idx}
                         style={{
@@ -338,7 +355,7 @@ export default function ConsultationDetails() {
                           marginBottom: 4,
                         }}
                       >
-                        {cond}
+                        {typeof cond === 'object' ? JSON.stringify(cond) : String(cond)}
                       </span>
                     ))
                   ) : (
@@ -350,8 +367,8 @@ export default function ConsultationDetails() {
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#dc2626', marginRight: 8 }}>
                     Known Allergies:
                   </span>
-                  {patient.allergies && patient.allergies.length > 0 ? (
-                    patient.allergies.map((alg, idx) => (
+                  {(Array.isArray(patient.allergies) ? patient.allergies : typeof patient.allergies === 'string' && patient.allergies ? patient.allergies.split(', ') : []).length > 0 ? (
+                    (Array.isArray(patient.allergies) ? patient.allergies : patient.allergies.split(', ')).map((alg, idx) => (
                       <span
                         key={idx}
                         style={{
@@ -366,7 +383,7 @@ export default function ConsultationDetails() {
                           marginBottom: 4,
                         }}
                       >
-                        ⚠️ {alg}
+                        ⚠️ {typeof alg === 'object' ? JSON.stringify(alg) : String(alg)}
                       </span>
                     ))
                   ) : (
@@ -378,8 +395,8 @@ export default function ConsultationDetails() {
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginRight: 8 }}>
                     Current Medications:
                   </span>
-                  {patient.medications && patient.medications.length > 0 ? (
-                    patient.medications.map((med, idx) => (
+                  {(Array.isArray(patient.medications) ? patient.medications : typeof patient.medications === 'string' && patient.medications ? patient.medications.split(', ') : []).length > 0 ? (
+                    (Array.isArray(patient.medications) ? patient.medications : patient.medications.split(', ')).map((med, idx) => (
                       <span
                         key={idx}
                         style={{
@@ -394,7 +411,7 @@ export default function ConsultationDetails() {
                           marginBottom: 4,
                         }}
                       >
-                        💊 {med}
+                        💊 {typeof med === 'object' ? JSON.stringify(med) : String(med)}
                       </span>
                     ))
                   ) : (
@@ -447,7 +464,9 @@ export default function ConsultationDetails() {
                   Chief Complaint
                 </div>
                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginTop: 4 }}>
-                  {consultation.chiefComplaint}
+                  {typeof consultation.chiefComplaint === 'object' && consultation.chiefComplaint !== null
+                    ? (consultation.chiefComplaint.text || JSON.stringify(consultation.chiefComplaint))
+                    : (consultation.chiefComplaint || 'Consultation Review')}
                 </div>
               </div>
 
@@ -467,7 +486,9 @@ export default function ConsultationDetails() {
                     lineHeight: 1.6,
                   }}
                 >
-                  {consultation.symptoms}
+                  {typeof consultation.symptoms === 'object' && consultation.symptoms !== null
+                    ? (consultation.symptoms.description || consultation.symptoms.text || (JSON.stringify(consultation.symptoms) === '{}' ? 'No specific symptom description recorded.' : JSON.stringify(consultation.symptoms)))
+                    : (consultation.symptoms || 'No specific symptom description recorded.')}
                 </div>
               </div>
 
@@ -582,7 +603,11 @@ export default function ConsultationDetails() {
                 {/* Blood Pressure Systolic / Diastolic */}
                 <VitalCard
                   label="Blood Pressure"
-                  value={vitals.bloodPressure || (vitals.bpSystolic ? `${vitals.bpSystolic}/${vitals.bpDiastolic}` : null)}
+                  value={
+                    typeof vitals.bloodPressure === 'object' && vitals.bloodPressure !== null
+                      ? (vitals.bloodPressure.systolic ? `${vitals.bloodPressure.systolic}/${vitals.bloodPressure.diastolic}` : '—')
+                      : (vitals.bloodPressure || (vitals.bpSystolic ? `${vitals.bpSystolic}/${vitals.bpDiastolic}` : null))
+                  }
                   unit="mmHg"
                   isAvailable={Boolean(vitals.bloodPressure || vitals.bpSystolic)}
                   icon={Activity}
@@ -971,18 +996,18 @@ export default function ConsultationDetails() {
               <div>
                 <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>ORIGINATING CLINIC</div>
                 <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b', marginTop: 2 }}>
-                  {consultation.clinicName}
+                  {safeString(consultation.clinicName, 'Rampur Primary Health Center')}
                 </div>
               </div>
 
               <div>
                 <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>HEALTHCARE WORKER</div>
                 <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b', marginTop: 2 }}>
-                  {consultation.healthWorkerName}
+                  {safeString(consultation.healthWorkerName, 'Community Health Staff')}
                 </div>
                 {consultation.healthWorkerPhone && (
                   <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                    {consultation.healthWorkerPhone}
+                    {safeString(consultation.healthWorkerPhone)}
                   </div>
                 )}
               </div>

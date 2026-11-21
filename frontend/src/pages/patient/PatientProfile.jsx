@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { User, Phone, MapPin, Heart, Shield, Edit2, CheckCircle, X, AlertCircle } from 'lucide-react';
+import { User, MapPin, Heart, Shield, Edit2, X, Check } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import patientService from '../../services/patientService';
 
 export default function PatientProfile() {
   const { currentUser } = useAuth();
+  const { addNotification } = useApp() || {};
+  const [successMsg, setSuccessMsg] = useState('');
 
   const [patient, setPatient] = useState({
     id: currentUser?.patientId || currentUser?.referenceId || currentUser?.id || 'PAT001',
@@ -28,8 +31,8 @@ export default function PatientProfile() {
   useEffect(() => {
     let mounted = true;
     async function loadFullProfile() {
-      if (currentUser?.patientId || currentUser?.referenceId) {
-        const id = currentUser.patientId || currentUser.referenceId;
+      if (currentUser?.patientId || currentUser?.referenceId || currentUser?.id) {
+        const id = currentUser.patientId || currentUser.referenceId || currentUser.id;
         const p = await patientService.getPatient(id).catch(() => null);
         if (mounted && p) {
           setPatient((prev) => ({ ...prev, ...p }));
@@ -47,6 +50,14 @@ export default function PatientProfile() {
     emergencyContactPhone: patient.emergencyContact?.phone || '',
   });
 
+  useEffect(() => {
+    setFormData({
+      phone: patient.phone || '',
+      emergencyContactName: patient.emergencyContact?.name || '',
+      emergencyContactPhone: patient.emergencyContact?.phone || '',
+    });
+  }, [patient]);
+
   const handleSave = (e) => {
     e.preventDefault();
     const updated = {
@@ -60,9 +71,17 @@ export default function PatientProfile() {
     };
 
     setPatient(updated);
-    localStorage.setItem(`carewave_patient_profile_${basePatient.id}`, JSON.stringify(updated));
+    try {
+      localStorage.setItem(`carewave_patient_profile_${patient.id}`, JSON.stringify(updated));
+    } catch (err) {
+      console.warn('Could not cache patient profile in localStorage:', err);
+    }
     setIsEditing(false);
-    addNotification('Contact and emergency details updated successfully!', 'success');
+    setSuccessMsg('Contact and emergency details updated successfully!');
+    if (addNotification) {
+      addNotification('Contact and emergency details updated successfully!', 'success');
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
   };
 
   return (
@@ -85,6 +104,14 @@ export default function PatientProfile() {
             <Edit2 size={16} /> Edit Contact Details
           </button>
         </div>
+
+        {/* Success Banner */}
+        {successMsg && (
+          <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 12, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#166534', fontWeight: 600 }}>
+            <Check size={18} color="#16a34a" />
+            {successMsg}
+          </div>
+        )}
 
         {/* Clinical Governance Notice */}
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 14, marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center' }}>

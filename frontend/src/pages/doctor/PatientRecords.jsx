@@ -1,25 +1,30 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Users, Eye, Phone, MapPin, X, FileText } from 'lucide-react';
+import { Search, Eye, MapPin, X } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import patientService from '../../services/patientService';
+import consultationService from '../../services/consultationService';
 import { formatDate } from '../../utils/formatDate';
-import EmptyState from '../../components/EmptyState';
 
 export default function DoctorPatientRecords() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [consultations, setConsultations] = useState([]);
+  const [, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    async function fetchPatients() {
+    async function fetchData() {
       try {
-        const pts = await patientService.getPatients();
-        if (mounted && Array.isArray(pts)) {
-          setPatients(pts);
+        const [pts, cons] = await Promise.all([
+          patientService.getPatients().catch(() => []),
+          consultationService.getConsultations().catch(() => []),
+        ]);
+        if (mounted) {
+          if (Array.isArray(pts)) setPatients(pts);
+          if (Array.isArray(cons)) setConsultations(cons);
         }
       } catch (err) {
         console.warn('Failed to load doctor patient records:', err);
@@ -27,7 +32,7 @@ export default function DoctorPatientRecords() {
         if (mounted) setLoading(false);
       }
     }
-    fetchPatients();
+    fetchData();
     return () => { mounted = false; };
   }, []);
 
@@ -184,25 +189,31 @@ export default function DoctorPatientRecords() {
                 <div style={{ marginBottom: 24 }}>
                   <h4 style={{ margin: '0 0 8px 0', fontSize: 13, color: '#64748b', textTransform: 'uppercase' }}>Consultations on Record</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {mockConsultations
-                      .filter((c) => c.patientId === selectedPatient.id)
-                      .map((c) => (
-                        <div key={c.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>{c.symptoms?.chiefComplaint || 'Consultation'}</div>
-                            <div style={{ fontSize: 12, color: '#64748b' }}>Case #{c.id} • {formatDate(c.createdAt)}</div>
-                          </div>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => {
-                              setSelectedPatient(null);
-                              navigate(`/doctor/consultation/${c.id}`);
-                            }}
-                          >
-                            Open Case
-                          </button>
-                        </div>
-                      ))}
+                    {consultations
+                      .filter((c) => c.patientId === selectedPatient.id || (selectedPatient.referenceId && c.patientId === selectedPatient.referenceId))
+                      .length === 0 ? (
+                        <div style={{ color: '#94a3b8', fontSize: 13, padding: '8px 0' }}>No consultations on record for this patient.</div>
+                      ) : (
+                        consultations
+                          .filter((c) => c.patientId === selectedPatient.id || (selectedPatient.referenceId && c.patientId === selectedPatient.referenceId))
+                          .map((c) => (
+                            <div key={c.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <div style={{ fontWeight: 600, fontSize: 14 }}>{c.symptoms?.chiefComplaint || 'Consultation'}</div>
+                                <div style={{ fontSize: 12, color: '#64748b' }}>Case #{c.id} • {formatDate(c.createdAt)}</div>
+                              </div>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => {
+                                  setSelectedPatient(null);
+                                  navigate(`/doctor/consultation/${c.id}`);
+                                }}
+                              >
+                                Open Case
+                              </button>
+                            </div>
+                          ))
+                      )}
                   </div>
                 </div>
 

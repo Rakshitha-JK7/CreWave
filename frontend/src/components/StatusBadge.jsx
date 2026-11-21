@@ -40,8 +40,16 @@ function resolveClass(status, type) {
 }
 
 export default function StatusBadge({ status, type = 'consultation' }) {
-  const label = resolveLabel(status, type);
-  const cls   = resolveClass(status, type);
+  const safeStatus =
+    typeof status === 'object' && status !== null
+      ? (status.label || status.name || status.status || status.value || '')
+      : (status || '');
+  const rawLabel = resolveLabel(safeStatus, type);
+  const label =
+    typeof rawLabel === 'object' && rawLabel !== null
+      ? (rawLabel.label || rawLabel.name || safeStatus || '—')
+      : String(rawLabel ?? '—');
+  const cls = resolveClass(safeStatus, type);
   const { bg, color } = colorMap[cls] || colorMap['badge-secondary'];
 
   return (

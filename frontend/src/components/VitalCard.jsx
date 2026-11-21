@@ -1,13 +1,30 @@
 import { AlertTriangle } from 'lucide-react';
 
+function formatVitalValue(val) {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'object') {
+    if (val.systolic !== undefined && val.diastolic !== undefined) {
+      return `${val.systolic}/${val.diastolic}`;
+    }
+    if (val.value !== undefined) {
+      return String(val.value);
+    }
+    const vals = Object.values(val).filter((v) => v !== null && v !== undefined && typeof v !== 'object');
+    return vals.length > 0 ? vals.join('/') : '—';
+  }
+  return String(val);
+}
+
 function isOutOfRange(value, normalRange) {
   if (!normalRange) return false;
-  const num = parseFloat(value);
+  const formatted = formatVitalValue(value);
+  const num = parseFloat(formatted);
   if (isNaN(num)) return false;
   return num < normalRange.min || num > normalRange.max;
 }
 
 export default function VitalCard({ label, value, unit, timestamp, isAvailable, icon: Icon, normalRange }) {
+  const displayValue = formatVitalValue(value);
   const outOfRange = isAvailable && isOutOfRange(value, normalRange);
 
   return (
@@ -39,10 +56,10 @@ export default function VitalCard({ label, value, unit, timestamp, isAvailable, 
       </div>
 
       {/* Value */}
-      {isAvailable ? (
+      {isAvailable && displayValue ? (
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
           <span style={{ fontSize: '1.5rem', fontWeight: 700, color: outOfRange ? '#f59e0b' : '#1e293b' }}>
-            {value}
+            {displayValue}
           </span>
           {unit && (
             <span style={{ fontSize: '0.8125rem', color: '#94a3b8', fontWeight: 500 }}>{unit}</span>

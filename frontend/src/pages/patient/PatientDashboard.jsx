@@ -1,12 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Activity, CheckCircle, MessageSquare, Clock, ArrowRight, User, AlertCircle, Heart } from 'lucide-react';
+import { FileText, Activity, CheckCircle, MessageSquare, ArrowRight, User } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import consultationService from '../../services/consultationService';
+import patientService from '../../services/patientService';
 import StatCard from '../../components/StatCard';
 import StatusBadge from '../../components/StatusBadge';
-import { formatDate, formatDateTime } from '../../utils/formatDate';
+import { formatDate } from '../../utils/formatDate';
 
 export default function PatientDashboard() {
   const navigate = useNavigate();
@@ -16,26 +17,39 @@ export default function PatientDashboard() {
   const patientName = currentUser?.name || 'Patient';
 
   const [consultations, setConsultations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [patientDetails, setPatientDetails] = useState(null);
+  const [, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    async function loadPatientConsultations() {
+    async function loadData() {
       try {
-        const data = await consultationService.getConsultations();
-        if (mounted && Array.isArray(data)) {
-          const myCons = data.filter(
-            (c) => c.patientId === patientId || c.patientName?.toLowerCase().includes(patientName.toLowerCase())
-          );
-          setConsultations(myCons);
+        const [data, p] = await Promise.all([
+          consultationService.getConsultations().catch(() => []),
+          patientId ? patientService.getPatient(patientId).catch(() => null) : Promise.resolve(null),
+        ]);
+
+        if (mounted) {
+          if (Array.isArray(data)) {
+            const myCons = data.filter(
+              (c) =>
+                c.patientId === patientId ||
+                c.patientReferenceId === patientId ||
+                (patientName && typeof c.patientName === 'string' && c.patientName.toLowerCase().includes(patientName.toLowerCase()))
+            );
+            setConsultations(myCons);
+          }
+          if (p) {
+            setPatientDetails(p);
+          }
         }
       } catch (err) {
-        console.warn('Failed to load patient consultations:', err);
+        console.warn('Failed to load patient data:', err);
       } finally {
         if (mounted) setLoading(false);
       }
     }
-    loadPatientConsultations();
+    loadData();
     return () => { mounted = false; };
   }, [patientId, patientName]);
 
@@ -76,7 +90,7 @@ export default function PatientDashboard() {
               Welcome back, {patientName}
             </h1>
             <p style={{ margin: 0, opacity: 0.9, fontSize: 14 }}>
-              Patient ID: <strong>{patientId}</strong> • Village: Rampur • Blood Group: B+
+              Patient ID: <strong>{patientId}</strong> • Village: {patientDetails?.village || currentUser?.village || 'Rampur'} • Blood Group: <strong>{patientDetails?.bloodGroup || currentUser?.bloodGroup || 'Not Specified'}</strong>
             </p>
           </div>
 
@@ -136,7 +150,9 @@ export default function PatientDashboard() {
             <div className="card-body">
               <div style={{ marginBottom: 16 }}>
                 <h4 style={{ margin: '0 0 4px 0', fontSize: 15, fontWeight: 600, color: '#0f172a' }}>
-                  {latestConsultation.symptoms?.chiefComplaint || 'Consultation at Rural Clinic'}
+                  {typeof latestConsultation.symptoms === 'object'
+                    ? (latestConsultation.symptoms?.chiefComplaint || latestConsultation.mainComplaint || 'Consultation at Rural Clinic')
+                    : (latestConsultation.symptoms || latestConsultation.mainComplaint || 'Consultation at Rural Clinic')}
                 </h4>
                 <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
                   <StatusBadge status={latestConsultation.status} type="consultation" />
@@ -272,31 +288,43 @@ export default function PatientDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {myConsultations.map((c) => (
-                    <tr key={c.id}>
-                      <td style={{ fontWeight: 600, color: '#0284c7' }}>{c.id}</td>
-                      <td style={{ fontSize: 13, color: '#64748b' }}>{formatDate(c.createdAt)}</td>
-                      <td>{c.clinicName || 'Rampur Primary Health Center'}</td>
-                      <td>{c.symptoms?.chiefComplaint || 'Consultation'}</td>
-                      <td>
-                        <StatusBadge status={c.status} type="consultation" />
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          {['response_available', 'completed'].includes(c.status) ? (
-                            <button
-                              className="btn btn-success btn-sm"
-                              onClick={() => navigate('/patient/advice')}
-                            >
-                              View Advice
-                            </button>
-                          ) : (
-                            <span style={{ fontSize: 12, color: '#94a3b8' }}>Awaiting review</span>
-                          )}
-                        </div>
+                  {consultations.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '36px 16px', color: '#64748b' }}>
+                        No consultations on record yet. When a health worker initiates a tele-consultation for you, your clinical history and progress will appear here.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    consultations.map((c) => (
+                      <tr key={c.id}>
+                        <td style={{ fontWeight: 600, color: '#0284c7' }}>{c.id}</td>
+                        <td style={{ fontSize: 13, color: '#64748b' }}>{formatDate(c.createdAt)}</td>
+                        <td>{c.clinicName || 'Rampur Primary Health Center'}</td>
+                        <td>
+                          {typeof c.symptoms === 'object'
+                            ? (c.symptoms?.chiefComplaint || c.mainComplaint || 'Consultation')
+                            : (c.symptoms || c.mainComplaint || 'Consultation')}
+                        </td>
+                        <td>
+                          <StatusBadge status={c.status} type="consultation" />
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            {['response_available', 'completed'].includes(c.status) ? (
+                              <button
+                                className="btn btn-success btn-sm"
+                                onClick={() => navigate('/patient/advice')}
+                              >
+                                View Advice
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: 12, color: '#94a3b8' }}>Awaiting review</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
