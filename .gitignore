@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+
+# Databases
+*.db
+*.db-wal
+*.db-shm
+
+# Uploads
+server/uploads/chunks/*
+!server/uploads/chunks/.gitkeep
+server/uploads/completed/*
+!server/uploads/completed/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
