@@ -1,15 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, CheckCircle, Clock, Calendar, MessageSquare, Check } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { mockNotifications } from '../../data/mockData';
 import { formatRelative } from '../../utils/formatDate';
 import EmptyState from '../../components/EmptyState';
 
 export default function PatientNotifications() {
-  const [notifications, setNotifications] = useState(
-    mockNotifications.filter((n) => n.role === 'patient')
-  );
+  const [notifications, setNotifications] = useState([]);
   const [filter, setFilter] = useState('all');
+
+  useEffect(() => {
+    const stored = localStorage.getItem('carewave_patient_notifications');
+    if (stored) {
+      try {
+        setNotifications(JSON.parse(stored));
+        return;
+      } catch (e) {}
+    }
+
+    const localResponses = JSON.parse(localStorage.getItem('carewave_responses') || '[]');
+    if (localResponses.length > 0) {
+      const generated = localResponses.map((r, i) => ({
+        id: `notif-resp-${r.id || i}`,
+        title: 'New Medical Advice Available',
+        message: `Dr. ${r.doctorName || 'Consultant'} has submitted clinical advice for your consultation.`,
+        type: 'response',
+        read: false,
+        createdAt: r.submittedAt || new Date().toISOString(),
+      }));
+      setNotifications(generated);
+    }
+  }, []);
 
   const handleMarkAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
@@ -77,8 +97,8 @@ export default function PatientNotifications() {
                     item.type === 'success'
                       ? '4px solid #16a34a'
                       : item.type === 'warning'
-                      ? '4px solid #ea580c'
-                      : '4px solid #0284c7',
+                        ? '4px solid #ea580c'
+                        : '4px solid #0284c7',
                 }}
               >
                 <div
@@ -90,14 +110,14 @@ export default function PatientNotifications() {
                       item.type === 'success'
                         ? '#dcfce7'
                         : item.type === 'warning'
-                        ? '#ffedd5'
-                        : '#e0f2fe',
+                          ? '#ffedd5'
+                          : '#e0f2fe',
                     color:
                       item.type === 'success'
                         ? '#16a34a'
                         : item.type === 'warning'
-                        ? '#ea580c'
-                        : '#0369a1',
+                          ? '#ea580c'
+                          : '#0369a1',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

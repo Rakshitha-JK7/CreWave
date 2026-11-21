@@ -5,11 +5,15 @@
 CREATE TABLE IF NOT EXISTS users (
   id VARCHAR(64) PRIMARY KEY,
   username VARCHAR(100) UNIQUE NOT NULL,
+  email VARCHAR(150),
   password_hash TEXT NOT NULL,
   name VARCHAR(150) NOT NULL,
   role VARCHAR(50) NOT NULL, -- 'health_worker', 'doctor', 'patient', 'admin'
+  status VARCHAR(50) DEFAULT 'active',
   clinic_id VARCHAR(64),
   contact_number VARCHAR(50),
+  specialization VARCHAR(100),
+  license_number VARCHAR(100),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -17,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS patients (
   id VARCHAR(64) PRIMARY KEY,
   reference_id VARCHAR(64) UNIQUE NOT NULL,
+  user_id VARCHAR(64),
   name VARCHAR(150),
   age INTEGER NOT NULL,
   date_of_birth VARCHAR(50),
@@ -24,6 +29,10 @@ CREATE TABLE IF NOT EXISTS patients (
   village VARCHAR(150) NOT NULL,
   contact_number VARCHAR(50),
   consent BOOLEAN DEFAULT TRUE,
+  blood_group VARCHAR(20),
+  emergency_contact VARCHAR(100),
+  medical_history TEXT,
+  allergies TEXT,
   created_by VARCHAR(64),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

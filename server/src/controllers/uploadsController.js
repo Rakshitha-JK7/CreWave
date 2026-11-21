@@ -8,7 +8,7 @@ class UploadsController {
         success: true,
         message: 'Upload session initialized.',
         uploadId: session.uploadId,
-        receivedChunks: [],
+        receivedChunks: session.receivedChunks || [],
         totalChunks: session.totalChunks,
         chunkSize: session.chunkSize,
         data: session,
@@ -91,6 +91,56 @@ class UploadsController {
         message: 'File upload assembled and integrity verified successfully.',
         data: result,
       });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async download(req, res, next) {
+    try {
+      const { id } = req.params;
+      const fileInfo = await uploadService.getAttachmentFile(id);
+
+      // Record level security: if patient, verify they own the consultation
+      if (req.user && req.user.role === 'patient') {
+        const userPatientId = req.user.patientId || req.user.referenceId || req.user.id;
+        if (fileInfo.patientId && fileInfo.patientId !== userPatientId) {
+          return res.status(403).json({
+            success: false,
+            error: 'Access denied: You may only download attachments belonging to your medical record.',
+            code: 'FORBIDDEN',
+          });
+        }
+      }
+
+      res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.fileName}"`);
+      res.setHeader('Content-Type', fileInfo.mimeType || 'application/octet-stream');
+      res.sendFile(fileInfo.filePath);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async view(req, res, next) {
+    try {
+      const { id } = req.params;
+      const fileInfo = await uploadService.getAttachmentFile(id);
+
+      // Record level security: if patient, verify they own the consultation
+      if (req.user && req.user.role === 'patient') {
+        const userPatientId = req.user.patientId || req.user.referenceId || req.user.id;
+        if (fileInfo.patientId && fileInfo.patientId !== userPatientId) {
+          return res.status(403).json({
+            success: false,
+            error: 'Access denied: You may only view attachments belonging to your medical record.',
+            code: 'FORBIDDEN',
+          });
+        }
+      }
+
+      res.setHeader('Content-Disposition', `inline; filename="${fileInfo.fileName}"`);
+      res.setHeader('Content-Type', fileInfo.mimeType || 'application/octet-stream');
+      res.sendFile(fileInfo.filePath);
     } catch (err) {
       next(err);
     }

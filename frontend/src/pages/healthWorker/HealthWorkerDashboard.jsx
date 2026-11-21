@@ -15,7 +15,8 @@ import StatCard from '../../components/StatCard';
 import StatusBadge from '../../components/StatusBadge';
 import { useApp } from '../../context/AppContext';
 import { formatDate, formatDateTime } from '../../utils/formatDate';
-import mockData from '../../data/mockData';
+import patientService from '../../services/patientService';
+import consultationService from '../../services/consultationService';
 import useNetworkStatus from '../../hooks/useNetworkStatus';
 
 export default function HealthWorkerDashboard() {
@@ -23,8 +24,31 @@ export default function HealthWorkerDashboard() {
   const { addNotification } = useApp();
   const { isOnline, effectiveType } = useNetworkStatus();
 
-  const patients = mockData.patients || [];
-  const consultations = mockData.consultations || [];
+  const [patients, setPatients] = useState([]);
+  const [consultations, setConsultations] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadData() {
+      try {
+        const [pts, cons] = await Promise.all([
+          patientService.getPatients().catch(() => []),
+          consultationService.getConsultations().catch(() => []),
+        ]);
+        if (mounted) {
+          setPatients(Array.isArray(pts) ? pts : []);
+          setConsultations(Array.isArray(cons) ? cons : []);
+        }
+      } catch (err) {
+        console.error('Failed to load dashboard data:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    loadData();
+    return () => { mounted = false; };
+  }, []);
 
   const totalPatients = patients.length;
   const totalConsultations = consultations.length;
@@ -40,8 +64,8 @@ export default function HealthWorkerDashboard() {
     .slice(0, 5);
 
   const getPatientName = (patientId) => {
-    const p = patients.find((pt) => pt.id === patientId);
-    return p ? p.name : patientId;
+    const p = patients.find((pt) => pt.id === patientId || pt.referenceId === patientId);
+    return p ? (p.name || p.referenceId) : (patientId || 'Unknown Patient');
   };
 
   const statCards = [

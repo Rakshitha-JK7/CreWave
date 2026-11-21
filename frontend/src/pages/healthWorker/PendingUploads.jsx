@@ -26,49 +26,11 @@ export default function PendingUploads() {
   const loadQueue = useCallback(async () => {
     setLoading(true);
     try {
-      let items = await getPendingUploads();
-      
-      // If queue is completely empty in initial demo, provide realistic simulated pending transfers
-      if (!items || items.length === 0) {
-        items = [
-          {
-            id: 'QUEUE-CW001',
-            consultationId: 'CW001',
-            patientName: 'Ravi Kumar',
-            status: 'paused',
-            progress: 45,
-            queuedAt: new Date(Date.now() - 3600000).toISOString(),
-            lastSync: new Date(Date.now() - 1800000).toISOString(),
-            pendingComponents: ['ECG Lead II File (140 KB)', 'Chest X-Ray Attachment (1.2 MB)'],
-            failedComponents: ['ECG Lead II File (140 KB) - Chunk #4 dropped'],
-          },
-          {
-            id: 'QUEUE-CW004',
-            consultationId: 'CW004',
-            patientName: 'Sunita Devi',
-            status: 'queued',
-            progress: 0,
-            queuedAt: new Date(Date.now() - 900000).toISOString(),
-            lastSync: null,
-            pendingComponents: ['Patient Demographic Record', 'Vitals & Peak Flow Symptoms'],
-            failedComponents: [],
-          },
-          {
-            id: 'QUEUE-CW007',
-            consultationId: 'CW007',
-            patientName: 'Mohd. Salim',
-            status: 'failed',
-            progress: 20,
-            queuedAt: new Date(Date.now() - 7200000).toISOString(),
-            lastSync: new Date(Date.now() - 7100000).toISOString(),
-            pendingComponents: ['Dermatology Lesion Photo (3.1 MB)'],
-            failedComponents: ['Chunk upload timed out after 15000ms'],
-          },
-        ];
-      }
-      setUploads(items);
+      const items = await getPendingUploads();
+      setUploads(items || []);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load pending upload queue:', err);
+      setUploads([]);
     } finally {
       setLoading(false);
     }

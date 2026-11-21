@@ -4,6 +4,9 @@ class ConsultationsController {
   async create(req, res, next) {
     try {
       const healthWorkerId = req.user ? req.user.id : (req.body.healthWorkerId || 'HW-DEMO-01');
+      if (req.user && req.user.clinicId && !req.body.clinicId) {
+        req.body.clinicId = req.user.clinicId;
+      }
       if (!req.body.idempotencyKey) {
         if (req.headers['idempotency-key']) {
           req.body.idempotencyKey = req.headers['idempotency-key'];

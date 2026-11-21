@@ -4,6 +4,7 @@ const config = require('../config/config');
 
 let dbInstance = null;
 let clientType = 'sqlite';
+let globalPgPool = null;
 
 // Helper to convert '?' placeholders to '$1, $2, ...' for Postgres
 function convertPlaceholders(sql) {
@@ -16,41 +17,63 @@ class DatabaseAdapter {
     this.client = null;
     this.type = 'sqlite';
     this.initialized = false;
+    this.initializingPromise = null;
   }
 
   async init() {
     if (this.initialized) return;
+    if (this.initializingPromise) return this.initializingPromise;
 
-    if (config.dbClient === 'postgres') {
-      try {
-        const { Pool } = require('pg');
-        const poolConfig = config.databaseUrl
-          ? { connectionString: config.databaseUrl }
-          : {
-              host: config.pg.host,
-              port: config.pg.port,
-              user: config.pg.user,
-              password: config.pg.password,
-              database: config.pg.database,
+    this.initializingPromise = (async () => {
+      if (config.dbClient === 'postgres') {
+        try {
+          if (!globalPgPool) {
+            const { Pool } = require('pg');
+            const poolConfig = {
+              ...(config.databaseUrl
+                ? { connectionString: config.databaseUrl }
+                : {
+                    host: config.pg.host,
+                    port: config.pg.port,
+                    user: config.pg.user,
+                    password: config.pg.password,
+                    database: config.pg.database,
+                  }),
+              max: 10,
+              idleTimeoutMillis: 10000,
+              connectionTimeoutMillis: 5000,
             };
 
-        const pool = new Pool(poolConfig);
-        // Test connection
-        await pool.query('SELECT 1');
-        this.client = pool;
-        this.type = 'postgres';
-        clientType = 'postgres';
-        console.log('[CareWave DB] Connected to PostgreSQL database.');
-      } catch (err) {
-        console.warn(`[CareWave DB] PostgreSQL connection failed (${err.message}). Falling back to built-in SQLite...`);
-        this.initSQLite();
-      }
-    } else {
-      this.initSQLite();
-    }
+            globalPgPool = new Pool(poolConfig);
+            // Test connection
+            await globalPgPool.query('SELECT 1');
+            console.log('[CareWave DB] Connected to PostgreSQL database.');
+          }
 
-    await this.createTables();
-    this.initialized = true;
+          this.client = globalPgPool;
+          this.type = 'postgres';
+          clientType = 'postgres';
+          this.initialized = true;
+        } catch (err) {
+          console.error(`[CareWave DB Error] Explicitly configured PostgreSQL connection failed: ${err.message}`);
+          throw new Error(`PostgreSQL connection failed: ${err.message}. Refusing silent fallback as PostgreSQL is explicitly configured.`);
+        }
+      } else {
+        this.initSQLite();
+        this.initialized = true;
+      }
+
+      // Run versioned migrations
+      const Migrator = require('./migrator');
+      const migrator = new Migrator(this);
+      await migrator.runMigrations();
+    })();
+
+    try {
+      await this.initializingPromise;
+    } finally {
+      this.initializingPromise = null;
+    }
   }
 
   initSQLite() {
@@ -72,16 +95,49 @@ class DatabaseAdapter {
     console.log(`[CareWave DB] SQLite database initialized at ${config.sqlite.dbPath}`);
   }
 
-  async createTables() {
-    const schemaPath = path.resolve(__dirname, '../../migrations/001_initial_schema.sql');
-    if (fs.existsSync(schemaPath)) {
-      const sql = fs.readFileSync(schemaPath, 'utf8');
-      if (this.type === 'sqlite') {
-        this.client.exec(sql);
-      } else {
-        await this.client.query(sql);
+  async transaction(fn) {
+    await this.init();
+    if (this.type === 'sqlite') {
+      this.client.exec('BEGIN TRANSACTION;');
+      try {
+        const result = await fn(this);
+        this.client.exec('COMMIT;');
+        return result;
+      } catch (err) {
+        this.client.exec('ROLLBACK;');
+        throw err;
       }
-      console.log('[CareWave DB] Initial schema verified.');
+    } else {
+      // PostgreSQL pool client transaction
+      const client = await this.client.connect();
+      try {
+        await client.query('BEGIN');
+        const txAdapter = {
+          run: async (sql, params = []) => {
+            const pgSql = convertPlaceholders(sql);
+            const res = await client.query(pgSql, params);
+            return { changes: res.rowCount, rowCount: res.rowCount };
+          },
+          get: async (sql, params = []) => {
+            const pgSql = convertPlaceholders(sql);
+            const res = await client.query(pgSql, params);
+            return res.rows && res.rows.length > 0 ? res.rows[0] : null;
+          },
+          all: async (sql, params = []) => {
+            const pgSql = convertPlaceholders(sql);
+            const res = await client.query(pgSql, params);
+            return res.rows || [];
+          },
+        };
+        const result = await fn(txAdapter);
+        await client.query('COMMIT');
+        return result;
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
     }
   }
 

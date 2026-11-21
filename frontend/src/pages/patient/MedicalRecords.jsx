@@ -1,22 +1,40 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Activity, Heart, Thermometer, Wind, Droplets, Paperclip, FileText, Download, Calendar, Shield } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { useApp } from '../../context/AppContext';
-import { mockConsultations, mockPatients } from '../../data/mockData';
+import { useAuth } from '../../context/AuthContext';
+import consultationService from '../../services/consultationService';
 import { formatDate } from '../../utils/formatDate';
 
 export default function MedicalRecords() {
-  const { currentUser } = useApp();
-  const patientId = currentUser?.id || 'PAT001';
+  const { currentUser } = useAuth();
+  const patientId = currentUser?.patientId || currentUser?.referenceId || currentUser?.id || 'PAT001';
+  const patientName = currentUser?.name || '';
 
-  const myConsultations = useMemo(() => {
-    let list = mockConsultations;
-    try {
-      const stored = localStorage.getItem('carewave_consultations');
-      if (stored) list = JSON.parse(stored);
-    } catch (e) {}
-    return list.filter((c) => c.patientId === patientId || c.patientName?.includes('Ravi Kumar'));
-  }, [patientId]);
+  const [consultations, setConsultations] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadRecords() {
+      try {
+        const data = await consultationService.getConsultations();
+        if (mounted && Array.isArray(data)) {
+          const myCons = data.filter(
+            (c) => c.patientId === patientId || (patientName && c.patientName?.toLowerCase().includes(patientName.toLowerCase()))
+          );
+          setConsultations(myCons);
+        }
+      } catch (err) {
+        console.warn('Failed to load medical records:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    loadRecords();
+    return () => { mounted = false; };
+  }, [patientId, patientName]);
+
+  const myConsultations = consultations;
 
   // Aggregate vitals across consultations
   const vitalsHistory = myConsultations.map((c) => ({

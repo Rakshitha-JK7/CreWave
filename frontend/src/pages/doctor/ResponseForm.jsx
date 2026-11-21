@@ -16,9 +16,9 @@ import {
   Pill,
 } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { mockData } from '../../data/mockData';
 import { useApp } from '../../context/AppContext';
 import responseService from '../../services/responseService';
+import doctorService from '../../services/doctorService';
 import StatusBadge from '../../components/StatusBadge';
 
 export default function ResponseForm() {
@@ -26,15 +26,42 @@ export default function ResponseForm() {
   const navigate = useNavigate();
   const { addNotification, currentUser } = useApp();
 
+  const [dbConsultation, setDbConsultation] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadRecord() {
+      try {
+        const c = await doctorService.getDoctorConsultation(id);
+        if (mounted && c) setDbConsultation(c);
+      } catch (err) {
+        console.warn('Failed to load consultation for response form:', err);
+      }
+    }
+    loadRecord();
+    return () => { mounted = false; };
+  }, [id]);
+
   // Find consultation
   const consultation = useMemo(() => {
-    let list = mockData.consultations;
+    if (dbConsultation) return dbConsultation;
     try {
       const stored = localStorage.getItem('carewave_consultations');
-      if (stored) list = JSON.parse(stored);
-    } catch (e) {}
-    return list.find((c) => c.id === id) || mockData.consultations[0];
-  }, [id]);
+      if (stored) {
+        const list = JSON.parse(stored);
+        const match = list.find((c) => c.id === id);
+        if (match) return match;
+      }
+    } catch (e) { }
+    return {
+      id,
+      patientId: 'PAT-LOCAL',
+      patientName: 'Patient Record',
+      status: 'under_review',
+      urgency: 'routine',
+      vitals: {},
+    };
+  }, [id, dbConsultation]);
 
   const [formData, setFormData] = useState({
     assessment: '',

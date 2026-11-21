@@ -2,28 +2,28 @@ const express = require('express');
 const router = express.Router();
 const consultationsController = require('../controllers/consultationsController');
 const responsesController = require('../controllers/responsesController');
-const { optionalAuth } = require('../middleware/auth');
+const { authenticateToken, requireRole } = require('../middleware/auth');
 
 // Create consultation (handles idempotency key for offline-first retries)
-router.post('/', optionalAuth, consultationsController.create);
+router.post('/', authenticateToken, requireRole('health_worker', 'admin'), consultationsController.create);
 
 // List all consultations for health worker / clinic / patient
-router.get('/', optionalAuth, consultationsController.list);
+router.get('/', authenticateToken, consultationsController.list);
 
 // Get consultation details
-router.get('/:id', optionalAuth, consultationsController.getById);
+router.get('/:id', authenticateToken, consultationsController.getById);
 
 // Update consultation data
-router.patch('/:id', optionalAuth, consultationsController.update);
+router.patch('/:id', authenticateToken, consultationsController.update);
 
 // Update doctor review status (in_review, reviewed_by_doctor)
-router.patch('/:id/review', optionalAuth, consultationsController.updateReview);
+router.patch('/:id/review', authenticateToken, requireRole('doctor', 'admin'), consultationsController.updateReview);
 
 // Get consultation delivery and sync status
-router.get('/:id/sync-status', optionalAuth, consultationsController.getSyncStatus);
+router.get('/:id/sync-status', authenticateToken, consultationsController.getSyncStatus);
 
 // Doctor response endpoints for a consultation
-router.post('/:id/responses', optionalAuth, responsesController.create);
-router.get('/:id/responses', optionalAuth, responsesController.listForConsultation);
+router.post('/:id/responses', authenticateToken, requireRole('doctor', 'admin'), responsesController.create);
+router.get('/:id/responses', authenticateToken, responsesController.listForConsultation);
 
 module.exports = router;

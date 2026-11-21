@@ -215,6 +215,24 @@ export class SyncQueue extends EventEmitter {
 
         // Mark consultation as received by server
         await updateConsultationStatus(item.consultationId, ConsultationStatus.RECEIVED_BY_SERVER);
+      } else if (item.type === 'response_acknowledgment') {
+        // Response acknowledgment
+        const respId = item.responseId || item.payload?.responseId;
+        await defaultRetryManager.executeWithRetry(async () => {
+          const res = await networkSimulator.simulatedFetch(`${this.apiBaseUrl}/responses/${respId}/acknowledge`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ acknowledgedAt: item.payload?.acknowledgedAt || new Date().toISOString() }),
+            signal,
+          });
+
+          if (!res.ok) {
+            throw new Error(`Acknowledgment transmission failed: HTTP ${res.status}`);
+          }
+          return res.json();
+        });
       } else {
         // Group 2/3: Chunked attachment upload
         const optimalChunkSize = networkMonitor.getOptimalChunkSize();

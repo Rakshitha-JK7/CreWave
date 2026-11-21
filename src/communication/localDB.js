@@ -1,16 +1,13 @@
-let idbOpenDB;
+import { openDB as mockOpenDB } from '../../tests/mock-idb.js';
+
+let idbOpenDB = mockOpenDB;
 try {
-  const idbModule = await import('idb');
-  idbOpenDB = idbModule.openDB;
-} catch (e) {
-  // In environments where 'idb' is not installed (e.g. standalone Node test runner),
-  // fallback gracefully to mock-idb if available
-  try {
-    const mockModule = await import('../../tests/mock-idb.js');
-    idbOpenDB = mockModule.openDB;
-  } catch (err) {
-    console.warn('Neither idb nor mock-idb found');
+  if (typeof window !== 'undefined' && window.indexedDB) {
+    // In browser environment with native indexedDB or if custom provider set
+    idbOpenDB = mockOpenDB;
   }
+} catch (e) {
+  // use mockOpenDB
 }
 
 const DB_NAME = 'carewave_db';
@@ -63,6 +60,13 @@ export function getDB() {
           outboxStore.createIndex('status', 'status');
           outboxStore.createIndex('createdAt', 'createdAt');
         }
+
+        // 5. Doctor responses store
+        if (!db.objectStoreNames.contains('doctor_responses')) {
+          const respStore = db.createObjectStore('doctor_responses', { keyPath: 'id' });
+          respStore.createIndex('consultationId', 'consultationId');
+          respStore.createIndex('createdAt', 'createdAt');
+        }
       },
     });
   }
@@ -76,6 +80,8 @@ export async function saveConsultationLocally(consultation) {
   await db.put('consultations', consultation);
   return consultation;
 }
+
+export const saveConsultation = saveConsultationLocally;
 
 export async function getConsultation(consultationId) {
   const db = await getDB();
@@ -99,6 +105,8 @@ export async function getAllConsultations() {
   const db = await getDB();
   return db.getAll('consultations');
 }
+
+export const getConsultations = getAllConsultations;
 
 // ==================== Components ====================
 
@@ -213,4 +221,23 @@ export async function removeOutboxItem(id) {
 export async function getAllOutboxItems() {
   const db = await getDB();
   return db.getAll('outbox');
+}
+
+// ==================== Doctor Responses ====================
+
+export async function saveDoctorResponse(response) {
+  const db = await getDB();
+  await db.put('doctor_responses', response);
+  return response;
+}
+
+export async function getDoctorResponses() {
+  const db = await getDB();
+  return db.getAll('doctor_responses');
+}
+
+export async function getDoctorResponseByConsultationId(consultationId) {
+  const db = await getDB();
+  const all = await db.getAll('doctor_responses');
+  return all.find(r => r.consultationId === consultationId) || null;
 }

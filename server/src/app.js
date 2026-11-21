@@ -8,6 +8,7 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 // Route imports
 const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
 const patientRoutes = require('./routes/patients');
 const consultationRoutes = require('./routes/consultations');
 const doctorRoutes = require('./routes/doctor');
@@ -31,8 +32,7 @@ if (config.nodeEnv !== 'test') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static file access for completed uploads
-app.use('/uploads/completed', express.static(config.completedDir));
+// Note: Medical uploads are kept private and served exclusively via authenticated /api/uploads routes.
 
 // Welcome / Root Landing Endpoint
 app.get('/', (req, res) => {
@@ -69,6 +69,7 @@ app.get(['/api/health', '/api/ping', '/health', '/ping'], (req, res) => {
 
 // API Routes
 app.use(`${config.apiPrefix}/auth`, authRoutes);
+app.use(`${config.apiPrefix}/admin`, adminRoutes);
 app.use(`${config.apiPrefix}/patients`, patientRoutes);
 app.use(`${config.apiPrefix}/consultations`, consultationRoutes);
 app.use(`${config.apiPrefix}/doctor`, doctorRoutes);

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
@@ -15,7 +15,7 @@ import {
   Layers,
 } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { mockData } from '../../data/mockData';
+import doctorService from '../../services/doctorService';
 import StatusBadge from '../../components/StatusBadge';
 import EmptyState from '../../components/EmptyState';
 import { formatDate, formatDateTime, formatRelative } from '../../utils/formatDate';
@@ -31,15 +31,26 @@ export default function IncomingConsultations() {
   const [urgencyFilter, setUrgencyFilter] = useState(initialUrgencyFilter); // all, critical, urgent, priority, routine
   const [dateFilter, setDateFilter] = useState('all'); // all, today, week, month
 
-  // Consultations from localStorage or mockData
-  const [consultations] = useState(() => {
-    try {
-      const stored = localStorage.getItem('carewave_consultations');
-      return stored ? JSON.parse(stored) : mockData.consultations;
-    } catch {
-      return mockData.consultations;
+  const [consultations, setConsultations] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadData() {
+      try {
+        const data = await doctorService.getDoctorConsultations();
+        if (mounted) {
+          setConsultations(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error('Failed to load doctor incoming consultations:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     }
-  });
+    loadData();
+    return () => { mounted = false; };
+  }, []);
 
   // Filter & sort logic: urgent cases sorted first by default
   const filteredConsultations = useMemo(() => {
@@ -115,7 +126,7 @@ export default function IncomingConsultations() {
   return (
     <DashboardLayout role="doctor">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        
+
         {/* Page Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
@@ -126,7 +137,7 @@ export default function IncomingConsultations() {
               Clinical triage queue received from rural clinics and health posts
             </p>
           </div>
-          
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: '0.825rem', color: '#475569', fontWeight: 600, backgroundColor: '#f1f5f9', padding: '6px 12px', borderRadius: 6 }}>
               Total: {filteredConsultations.length} {filteredConsultations.length === 1 ? 'case' : 'cases'}

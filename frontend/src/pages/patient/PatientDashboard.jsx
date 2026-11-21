@@ -1,40 +1,53 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Activity, CheckCircle, MessageSquare, Clock, ArrowRight, User, AlertCircle, Heart } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { useApp } from '../../context/AppContext';
-import { mockConsultations, mockResponses } from '../../data/mockData';
+import { useAuth } from '../../context/AuthContext';
+import consultationService from '../../services/consultationService';
 import StatCard from '../../components/StatCard';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDate, formatDateTime } from '../../utils/formatDate';
 
 export default function PatientDashboard() {
   const navigate = useNavigate();
-  const { currentUser } = useApp();
+  const { currentUser } = useAuth();
 
-  const patientId = currentUser?.id || 'PAT001';
-  const patientName = currentUser?.name || 'Ravi Kumar';
+  const patientId = currentUser?.patientId || currentUser?.referenceId || currentUser?.id || 'PAT001';
+  const patientName = currentUser?.name || 'Patient';
 
-  // Get patient's consultations
-  const myConsultations = useMemo(() => {
-    let list = mockConsultations;
-    try {
-      const stored = localStorage.getItem('carewave_consultations');
-      if (stored) list = JSON.parse(stored);
-    } catch (e) {}
+  const [consultations, setConsultations] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    return list.filter((c) => c.patientId === patientId || c.patientName?.includes(patientName));
+  useEffect(() => {
+    let mounted = true;
+    async function loadPatientConsultations() {
+      try {
+        const data = await consultationService.getConsultations();
+        if (mounted && Array.isArray(data)) {
+          const myCons = data.filter(
+            (c) => c.patientId === patientId || c.patientName?.toLowerCase().includes(patientName.toLowerCase())
+          );
+          setConsultations(myCons);
+        }
+      } catch (err) {
+        console.warn('Failed to load patient consultations:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    loadPatientConsultations();
+    return () => { mounted = false; };
   }, [patientId, patientName]);
 
-  const ongoingCount = myConsultations.filter((c) =>
-    ['pending_upload', 'uploading', 'partially_uploaded', 'delivered', 'under_review'].includes(c.status)
+  const ongoingCount = consultations.filter((c) =>
+    ['pending_upload', 'uploading', 'partially_uploaded', 'delivered', 'under_review', 'pending'].includes(c.status)
   ).length;
 
-  const completedCount = myConsultations.filter((c) =>
+  const completedCount = consultations.filter((c) =>
     ['response_available', 'completed'].includes(c.status)
   ).length;
 
-  const latestConsultation = myConsultations[0] || null;
+  const latestConsultation = consultations[0] || null;
 
   return (
     <DashboardLayout role="patient">
@@ -152,11 +165,10 @@ export default function PatientDashboard() {
                     background: ['delivered', 'under_review', 'response_available', 'completed'].includes(latestConsultation.status)
                       ? '#f0fdf4'
                       : '#fef3c7',
-                    border: `1px solid ${
-                      ['delivered', 'under_review', 'response_available', 'completed'].includes(latestConsultation.status)
-                        ? '#bbf7d0'
-                        : '#fde68a'
-                    }`,
+                    border: `1px solid ${['delivered', 'under_review', 'response_available', 'completed'].includes(latestConsultation.status)
+                      ? '#bbf7d0'
+                      : '#fde68a'
+                      }`,
                   }}
                 >
                   <div

@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Search, Eye, MessageSquare, Calendar, ArrowRight, User } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { mockData, mockResponses } from '../../data/mockData';
+import doctorService from '../../services/doctorService';
 import { formatDate, formatDateTime } from '../../utils/formatDate';
 import StatusBadge from '../../components/StatusBadge';
 import EmptyState from '../../components/EmptyState';
@@ -10,19 +10,28 @@ import EmptyState from '../../components/EmptyState';
 export default function ReviewedCases() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [consultations, setConsultations] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Collect reviewed consultations
-  const reviewedConsultations = useMemo(() => {
-    let list = mockData.consultations;
-    try {
-      const stored = localStorage.getItem('carewave_consultations');
-      if (stored) list = JSON.parse(stored);
-    } catch (e) {}
-
-    return list.filter((c) => ['response_available', 'completed'].includes(c.status));
+  useEffect(() => {
+    let mounted = true;
+    async function loadReviewed() {
+      try {
+        const data = await doctorService.getDoctorConsultations();
+        if (mounted && Array.isArray(data)) {
+          setConsultations(data.filter((c) => ['response_available', 'completed', 'reviewed_by_doctor'].includes(c.status)));
+        }
+      } catch (err) {
+        console.warn('Failed to load reviewed cases:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    loadReviewed();
+    return () => { mounted = false; };
   }, []);
 
-  const filtered = reviewedConsultations.filter((c) => {
+  const filtered = consultations.filter((c) => {
     const q = searchQuery.toLowerCase();
     return (
       c.id?.toLowerCase().includes(q) ||

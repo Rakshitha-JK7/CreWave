@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Inbox,
@@ -16,40 +16,51 @@ import {
   Calendar,
 } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { useApp } from '../../context/AppContext';
-import { mockData } from '../../data/mockData';
+import { useAuth } from '../../context/AuthContext';
+import doctorService from '../../services/doctorService';
 import StatCard from '../../components/StatCard';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDate, formatDateTime, formatRelative } from '../../utils/formatDate';
 
 export default function DoctorDashboard() {
   const navigate = useNavigate();
-  const { currentUser } = useApp() || {};
+  const { currentUser } = useAuth();
 
-  // Retrieve consultations from localStorage if any, falling back to mockData
-  const [consultations] = useState(() => {
-    try {
-      const stored = localStorage.getItem('carewave_consultations');
-      return stored ? JSON.parse(stored) : mockData.consultations;
-    } catch {
-      return mockData.consultations;
+  const [consultations, setConsultations] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadData() {
+      try {
+        const data = await doctorService.getDoctorConsultations();
+        if (mounted) {
+          setConsultations(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error('Failed to load doctor consultations:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     }
-  });
+    loadData();
+    return () => { mounted = false; };
+  }, []);
 
   // Calculate metrics
   const incomingCount = consultations.filter((c) =>
-    ['delivered', 'under_review', 'partially_uploaded'].includes(c.status)
+    ['delivered', 'under_review', 'partially_uploaded', 'pending', 'received_by_server'].includes(c.status)
   ).length;
 
   const pendingCount = consultations.filter((c) =>
-    ['delivered', 'under_review', 'partially_uploaded', 'pending_upload'].includes(c.status)
+    !['response_available', 'completed'].includes(c.status)
   ).length;
 
   const reviewedCount = consultations.filter((c) =>
     ['response_available', 'completed'].includes(c.status)
   ).length;
 
-  const responsesSentCount = mockData.responses.length;
+  const responsesSentCount = reviewedCount;
 
   const urgentPendingCases = useMemo(() => {
     return consultations.filter(
@@ -86,7 +97,7 @@ export default function DoctorDashboard() {
   return (
     <DashboardLayout role="doctor">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        
+
         {/* Welcome Doctor Banner */}
         <div
           style={{
@@ -112,10 +123,10 @@ export default function DoctorDashboard() {
               </span>
             </div>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
-              Welcome back, {mockData.doctor?.name || 'Dr. Anjali Mehta'}
+              Welcome back, {currentUser?.name || 'Doctor'}
             </h1>
             <p style={{ color: '#64748b', fontSize: '0.875rem', margin: '4px 0 0 0' }}>
-              {mockData.doctor?.specialization} · {mockData.doctor?.hospital}
+              {currentUser?.specialization || 'Medical Specialist'} · Licensed Physician
             </p>
           </div>
 

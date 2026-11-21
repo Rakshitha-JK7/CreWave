@@ -1,15 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, CheckCircle, AlertTriangle, Clock, ArrowRight, Check } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { mockNotifications } from '../../data/mockData';
+import doctorService from '../../services/doctorService';
 import { formatRelative } from '../../utils/formatDate';
 import EmptyState from '../../components/EmptyState';
 
 export default function DoctorNotifications() {
-  const [notifications, setNotifications] = useState(
-    mockNotifications.filter((n) => n.role === 'doctor')
-  );
+  const [notifications, setNotifications] = useState([]);
   const [filter, setFilter] = useState('all'); // all, unread
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadNotifications() {
+      try {
+        const stored = localStorage.getItem('carewave_doctor_notifications');
+        if (stored) {
+          if (mounted) setNotifications(JSON.parse(stored));
+          return;
+        }
+
+        // Generate dynamic notifications from real incoming queue
+        const consultations = await doctorService.getDoctorConsultations().catch(() => []);
+        if (mounted && Array.isArray(consultations) && consultations.length > 0) {
+          const generated = consultations.slice(0, 5).map((c, i) => ({
+            id: `notif-doc-${c.id || i}`,
+            title: `New Case: ${c.patientName || c.patientId || 'Patient'}`,
+            message: `Priority: ${c.priority || c.urgency || 'Normal'}. Clinical summary submitted.`,
+            type: ['emergency', 'urgent'].includes(c.priority) ? 'urgent' : 'info',
+            read: false,
+            createdAt: c.createdAt || new Date().toISOString(),
+          }));
+          setNotifications(generated);
+        }
+      } catch (err) {
+        console.warn('Failed to load doctor notifications:', err);
+      }
+    }
+    loadNotifications();
+    return () => { mounted = false; };
+  }, []);
 
   const handleMarkAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
@@ -77,8 +106,8 @@ export default function DoctorNotifications() {
                     item.type === 'urgent'
                       ? '4px solid #ef4444'
                       : item.type === 'success'
-                      ? '4px solid #22c55e'
-                      : '4px solid #0284c7',
+                        ? '4px solid #22c55e'
+                        : '4px solid #0284c7',
                 }}
               >
                 <div
@@ -90,14 +119,14 @@ export default function DoctorNotifications() {
                       item.type === 'urgent'
                         ? '#fee2e2'
                         : item.type === 'success'
-                        ? '#dcfce7'
-                        : '#e0f2fe',
+                          ? '#dcfce7'
+                          : '#e0f2fe',
                     color:
                       item.type === 'urgent'
                         ? '#dc2626'
                         : item.type === 'success'
-                        ? '#16a34a'
-                        : '#0369a1',
+                          ? '#16a34a'
+                          : '#0369a1',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   User,
@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import { useApp } from '../../context/AppContext';
-import { mockData } from '../../data/mockData';
+import doctorService from '../../services/doctorService';
+import patientService from '../../services/patientService';
 import VitalCard from '../../components/VitalCard';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDate, formatDateTime, formatRelative } from '../../utils/formatDate';
@@ -37,39 +38,74 @@ export default function ConsultationDetails() {
   const navigate = useNavigate();
   const { addNotification } = useApp() || {};
 
-  // Find consultation from localStorage or mockData
+  const [dbConsultation, setDbConsultation] = useState(null);
+  const [dbPatient, setDbPatient] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    async function fetchRecord() {
+      try {
+        const c = await doctorService.getDoctorConsultation(id);
+        if (mounted && c) {
+          setDbConsultation(c);
+          if (c.patientId) {
+            const p = await patientService.getPatient(c.patientId).catch(() => null);
+            if (mounted && p) setDbPatient(p);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load consultation from API:', err);
+      }
+    }
+    fetchRecord();
+    return () => { mounted = false; };
+  }, [id]);
+
+  // Find consultation from loaded API record or localStorage
   const consultation = useMemo(() => {
-    let list = mockData.consultations;
+    if (dbConsultation) return dbConsultation;
     try {
       const stored = localStorage.getItem('carewave_consultations');
-      if (stored) list = JSON.parse(stored);
+      if (stored) {
+        const list = JSON.parse(stored);
+        const match = list.find((c) => c.id === id);
+        if (match) return match;
+      }
     } catch (e) {
       // ignore
     }
-    return list.find((c) => c.id === id) || mockData.consultations[0];
-  }, [id]);
+    return {
+      id,
+      patientId: 'PAT-LOCAL',
+      patientName: 'Patient Record',
+      status: 'pending',
+      urgency: 'routine',
+      vitals: {},
+      symptoms: {},
+      attachments: [],
+    };
+  }, [id, dbConsultation]);
 
-  // Find patient details
+  // Patient details
   const patient = useMemo(() => {
-    return (
-      mockData.patients.find((p) => p.id === consultation.patientId) || {
-        id: consultation.patientId || 'PAT001',
-        name: consultation.patientName || 'Ravi Kumar',
-        age: consultation.patientAge || 45,
-        sex: consultation.patientSex || 'Male',
-        village: consultation.patientVillage || 'Rampur',
-        bloodGroup: 'B+',
-        emergencyContact: {
-          name: 'Sunita Kumar',
-          phone: '+91-9876543211',
-          relation: 'Spouse',
-        },
-        conditions: ['Hypertension', 'Type 2 Diabetes'],
-        allergies: ['Penicillin'],
-        medications: ['Metformin 500mg', 'Amlodipine 5mg'],
-      }
-    );
-  }, [consultation]);
+    if (dbPatient) return dbPatient;
+    return {
+      id: consultation.patientId || 'PAT001',
+      name: consultation.patientName || 'Patient',
+      age: consultation.patientAge || 45,
+      sex: consultation.patientSex || 'Male',
+      village: consultation.patientVillage || 'Rural Center',
+      bloodGroup: consultation.bloodGroup || 'B+',
+      emergencyContact: {
+        name: 'Family Contact',
+        phone: '+91-9876543211',
+        relation: 'Relative',
+      },
+      conditions: [],
+      allergies: [],
+      medications: [],
+    };
+  }, [consultation, dbPatient]);
 
   // Modals state
   const [previewImage, setPreviewImage] = useState(null);
@@ -85,8 +121,8 @@ export default function ConsultationDetails() {
     (consultation.status === 'delivered'
       ? 100
       : consultation.status === 'partially_uploaded'
-      ? 65
-      : 100);
+        ? 65
+        : 100);
 
   const hasPendingAttachments = consultation.attachments?.some(
     (a) => a.status === 'pending' || a.status === 'partial'
@@ -117,7 +153,7 @@ export default function ConsultationDetails() {
   return (
     <DashboardLayout role="doctor">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        
+
         {/* Top Back Navigation Bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <button
@@ -191,7 +227,7 @@ export default function ConsultationDetails() {
         >
           {/* ================= LEFT COLUMN (Clinical Info) ================= */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            
+
             {/* SECTION 1: Patient Information */}
             <div
               style={{
@@ -819,7 +855,7 @@ export default function ConsultationDetails() {
 
           {/* ================= RIGHT PANEL (Actions + Metadata) ================= */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            
+
             {/* Quick Action Card */}
             <div
               style={{

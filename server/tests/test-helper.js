@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 const { Readable } = require('stream');
 const { EventEmitter } = require('events');
 const app = require('../src/app');

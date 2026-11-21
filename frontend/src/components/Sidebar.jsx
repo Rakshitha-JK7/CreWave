@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
   Heart,
   LayoutDashboard,
@@ -19,7 +20,19 @@ import {
   CheckCircle,
   Send,
   LogOut,
+  ShieldCheck,
 } from 'lucide-react';
+
+const healthWorkerNav = [
+  { icon: LayoutDashboard, label: 'Dashboard',           path: '/health-worker' },
+  { icon: UserPlus,        label: 'Register Patient',    path: '/health-worker/register-patient' },
+  { icon: Users,           label: 'Patient Records',     path: '/health-worker/patients' },
+  { icon: FilePlus,        label: 'New Consultation',    path: '/health-worker/new-consultation' },
+  { icon: ClipboardList,   label: 'Consultation History',path: '/health-worker/consultations' },
+  { icon: Clock,           label: 'Pending Uploads',     path: '/health-worker/pending-uploads' },
+  { icon: MessageSquare,   label: 'Doctor Responses',    path: '/health-worker/responses' },
+  { icon: Wifi,            label: 'Network Monitor',     path: '/health-worker/network' },
+];
 
 const navByRole = {
   patient: [
@@ -29,26 +42,18 @@ const navByRole = {
     { icon: Clipboard,       label: 'Medical Records',  path: '/patient/records' },
     { icon: MessageSquare,   label: "Doctor's Advice",  path: '/patient/advice' },
     { icon: Bell,            label: 'Notifications',    path: '/patient/notifications' },
-    { icon: HelpCircle,      label: 'Help',             path: '/patient/help' },
   ],
-  healthWorker: [
-    { icon: LayoutDashboard, label: 'Dashboard',           path: '/health-worker' },
-    { icon: UserPlus,        label: 'Register Patient',    path: '/health-worker/register-patient' },
-    { icon: Users,           label: 'Patient Records',     path: '/health-worker/patients' },
-    { icon: FilePlus,        label: 'New Consultation',    path: '/health-worker/new-consultation' },
-    { icon: ClipboardList,   label: 'Consultation History',path: '/health-worker/consultations' },
-    { icon: Clock,           label: 'Pending Uploads',     path: '/health-worker/pending-uploads' },
-    { icon: MessageSquare,   label: 'Doctor Responses',    path: '/health-worker/responses' },
-    { icon: Wifi,            label: 'Network Monitor',     path: '/health-worker/network' },
-  ],
+  health_worker: healthWorkerNav,
+  healthWorker: healthWorkerNav,
   doctor: [
     { icon: LayoutDashboard, label: 'Dashboard',              path: '/doctor' },
     { icon: Inbox,           label: 'Incoming Consultations', path: '/doctor/incoming' },
-    { icon: Clock,           label: 'Pending Reviews',        path: '/doctor/pending' },
     { icon: CheckCircle,     label: 'Reviewed Cases',         path: '/doctor/reviewed' },
     { icon: Users,           label: 'Patient Records',        path: '/doctor/patients' },
-    { icon: Send,            label: 'Responses Sent',         path: '/doctor/responses' },
     { icon: Bell,            label: 'Notifications',          path: '/doctor/notifications' },
+  ],
+  admin: [
+    { icon: ShieldCheck,     label: 'Admin Overview',         path: '/admin' },
   ],
 };
 
@@ -94,7 +99,14 @@ function NavItem({ icon: Icon, label, path }) {
 }
 
 export default function Sidebar({ role, isOpen, onClose }) {
-  const items = navByRole[role] || navByRole.healthWorker;
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+  const items = navByRole[role] || navByRole.health_worker;
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth <= 768 : false
@@ -196,11 +208,7 @@ export default function Sidebar({ role, isOpen, onClose }) {
           }}
         >
           <button
-            onClick={() =>
-              alert(
-                'Authentication will be implemented in Phase 7. This is a development placeholder.'
-              )
-            }
+            onClick={handleLogout}
             style={{
               display: 'flex',
               alignItems: 'center',

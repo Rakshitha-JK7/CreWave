@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageSquare, Check, CheckCircle2, User, Printer, Calendar, Pill, AlertTriangle, X, Eye } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { mockResponses } from '../../data/mockData';
+import { syncDoctorResponses } from '../../offline/offlineQueue';
 import { formatDateTime } from '../../utils/formatDate';
 import { useApp } from '../../context/AppContext';
 import EmptyState from '../../components/EmptyState';
@@ -17,23 +17,33 @@ export default function DoctorResponses() {
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
 
   useEffect(() => {
-    // Load responses from localStorage or mock data
-    const local = JSON.parse(localStorage.getItem('carewave_responses') || '[]');
-    const combined = [...local];
-    mockResponses.forEach((mr) => {
-      if (!combined.some((item) => item.id === mr.id || item.consultationId === mr.consultationId)) {
-        combined.push(mr);
+    let mounted = true;
+    async function loadResponses() {
+      try {
+        const res = await syncDoctorResponses();
+        const local = JSON.parse(localStorage.getItem('carewave_responses') || '[]');
+        const combined = [...local];
+        if (res.responses && Array.isArray(res.responses)) {
+          res.responses.forEach((r) => {
+            if (!combined.some((item) => item.id === r.id)) {
+              combined.push(r);
+            }
+          });
+        }
+
+        const commStatus = JSON.parse(localStorage.getItem('carewave_communicated_responses') || '{}');
+        const enriched = combined.map((r) => ({
+          ...r,
+          communicatedToPatient: commStatus[r.id] || false,
+        }));
+
+        if (mounted) setResponses(enriched);
+      } catch (err) {
+        console.warn('Failed to load doctor responses:', err);
       }
-    });
-
-    // Check communication status from localStorage
-    const commStatus = JSON.parse(localStorage.getItem('carewave_communicated_responses') || '{}');
-    const enriched = combined.map((r) => ({
-      ...r,
-      communicatedToPatient: commStatus[r.id] || false,
-    }));
-
-    setResponses(enriched);
+    }
+    loadResponses();
+    return () => { mounted = false; };
   }, []);
 
   const handleMarkCommunicated = (responseId) => {

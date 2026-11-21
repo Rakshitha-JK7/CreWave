@@ -1,24 +1,25 @@
 import { Menu } from 'lucide-react';
 import NetworkStatus from './NetworkStatus';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 const roleLabels = {
-  patient:      'Patient',
-  healthWorker: 'Health Worker',
-  doctor:       'Doctor',
-  admin:        'Admin',
+  patient:       'Patient',
+  health_worker: 'Health Worker',
+  healthWorker:  'Health Worker',
+  doctor:        'Doctor',
+  admin:         'Admin',
 };
 
 const roleColors = {
-  patient:      { bg: '#dcfce7', color: '#166534' },
-  healthWorker: { bg: '#dbeafe', color: '#1e40af' },
-  doctor:       { bg: '#f3e8ff', color: '#6b21a8' },
-  admin:        { bg: '#fee2e2', color: '#991b1b' },
+  patient:       { bg: '#dcfce7', color: '#166534' },
+  health_worker: { bg: '#dbeafe', color: '#1e40af' },
+  healthWorker:  { bg: '#dbeafe', color: '#1e40af' },
+  doctor:        { bg: '#f3e8ff', color: '#6b21a8' },
+  admin:         { bg: '#fee2e2', color: '#991b1b' },
 };
 
 export default function Navbar({ title, isMobile, onMenuToggle }) {
-  const { state } = useApp();
-  const user = state?.currentUser;
+  const { currentUser: user } = useAuth();
   const role = user?.role;
   const roleCfg = roleColors[role] || { bg: '#f1f5f9', color: '#475569' };
 

@@ -68,8 +68,32 @@ class UploadService {
 
     // Calculate totalChunks if not provided
     const calculatedChunks = totalChunks || Math.ceil(fileSize / chunkSize);
-    const uploadId = `UPL-${uuidv4().substring(0, 8).toUpperCase()}`;
     const finalAttachmentId = attachmentId || `ATT-${uuidv4().substring(0, 8).toUpperCase()}`;
+
+    // Session reuse: check if an active session already exists for this consultation and attachment
+    const existingSession = await db.get(
+      "SELECT * FROM upload_sessions WHERE consultation_id = ? AND (attachment_id = ? OR id = ?) AND status != 'completed' ORDER BY created_at DESC",
+      [consultationId, finalAttachmentId, payload.uploadId || '']
+    );
+
+    if (existingSession) {
+      const status = await this.getUploadStatus(existingSession.id);
+      return {
+        uploadId: existingSession.id,
+        consultationId: existingSession.consultation_id,
+        attachmentId: existingSession.attachment_id,
+        fileName: existingSession.file_name,
+        fileSize: existingSession.file_size,
+        chunkSize: existingSession.chunk_size,
+        totalChunks: existingSession.total_chunks,
+        receivedChunks: status.receivedChunks,
+        status: existingSession.status,
+        expiresInHours: config.uploadSessionTtlHours,
+        resumed: true,
+      };
+    }
+
+    const uploadId = `UPL-${uuidv4().substring(0, 8).toUpperCase()}`;
 
     // Create session chunk storage directory
     const sessionChunkDir = path.join(config.chunkDir, uploadId);
@@ -88,7 +112,7 @@ class UploadService {
         [
           finalAttachmentId,
           consultationId,
-          componentType,
+          componentId || finalAttachmentId,
           componentType,
           priority,
           fileName,
@@ -100,8 +124,8 @@ class UploadService {
       );
     } else {
       await db.run(
-        `UPDATE attachments SET upload_status = 'uploading', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [finalAttachmentId]
+        `UPDATE attachments SET upload_status = 'uploading', component_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [componentId || finalAttachmentId, finalAttachmentId]
       );
     }
 
@@ -383,6 +407,26 @@ class UploadService {
       throw err;
     }
 
+    // Verify file type signatures (disallow dangerous executable formats)
+    try {
+      const headerBuffer = Buffer.alloc(16);
+      const fd = fs.openSync(finalFilePath, 'r');
+      fs.readSync(fd, headerBuffer, 0, 16, 0);
+      fs.closeSync(fd);
+
+      const isWindowsExe = headerBuffer[0] === 0x4D && headerBuffer[1] === 0x5A; // MZ
+      const isElf = headerBuffer[0] === 0x7F && headerBuffer[1] === 0x45 && headerBuffer[2] === 0x4C && headerBuffer[3] === 0x46; // .ELF
+      if (isWindowsExe || isElf) {
+        if (fs.existsSync(finalFilePath)) fs.unlinkSync(finalFilePath);
+        const err = new Error('Security violation: Executable binary files are prohibited.');
+        err.statusCode = 400;
+        err.code = 'MALICIOUS_FILE_TYPE';
+        throw err;
+      }
+    } catch (readErr) {
+      if (readErr.code === 'MALICIOUS_FILE_TYPE') throw readErr;
+    }
+
     // Update upload_sessions status
     await db.run(
       `UPDATE upload_sessions
@@ -421,7 +465,61 @@ class UploadService {
       checksumAlgorithm: algo,
       verified: true,
       status: 'completed',
+      isComplete: true,
       storagePath: finalFilePath,
+    };
+  }
+
+  /**
+   * Retrieve attachment file metadata and verified on-disk storage path for secure download
+   */
+  async getAttachmentFile(attachmentIdOrUploadId) {
+    let att = await db.get(
+      `SELECT a.id, a.consultation_id, a.component_id, a.file_name, a.file_size, a.mime_type,
+              a.storage_path, a.checksum, c.clinic_id, c.patient_id
+       FROM attachments a
+       LEFT JOIN consultations c ON a.consultation_id = c.id
+       WHERE a.id = ? OR a.component_id = ?`,
+      [attachmentIdOrUploadId, attachmentIdOrUploadId]
+    );
+
+    if (!att) {
+      const session = await this.getSession(attachmentIdOrUploadId);
+      if (session) {
+        att = await db.get(
+          `SELECT a.id, a.consultation_id, a.component_id, a.file_name, a.file_size, a.mime_type,
+                  a.storage_path, a.checksum, c.clinic_id, c.patient_id
+           FROM attachments a
+           LEFT JOIN consultations c ON a.consultation_id = c.id
+           WHERE a.id = ?`,
+          [session.attachment_id]
+        );
+      }
+    }
+
+    if (!att || !att.storage_path || !fs.existsSync(att.storage_path)) {
+      const err = new Error(`Attachment file not found: ${attachmentIdOrUploadId}`);
+      err.statusCode = 404;
+      err.code = 'FILE_NOT_FOUND';
+      throw err;
+    }
+
+    // Path traversal check
+    const safeRel = path.relative(config.completedDir, att.storage_path);
+    if (safeRel.startsWith('..')) {
+      const err = new Error('Security violation: Path traversal detected.');
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN_PATH';
+      throw err;
+    }
+
+    return {
+      filePath: att.storage_path,
+      fileName: att.file_name || 'medical_attachment.dat',
+      mimeType: att.mime_type || 'application/octet-stream',
+      fileSize: att.file_size,
+      clinicId: att.clinic_id,
+      patientId: att.patient_id,
     };
   }
 }

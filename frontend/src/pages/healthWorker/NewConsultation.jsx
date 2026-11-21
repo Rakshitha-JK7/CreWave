@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import DashboardLayout from '../../layouts/DashboardLayout'
 import { useApp } from '../../context/AppContext'
-import { mockData } from '../../data/mockData'
+import patientService from '../../services/patientService'
 import { validateConsultation } from '../../utils/validation'
 import { enqueueConsultation } from '../../offline/offlineQueue'
 import { saveConsultation, getDraftConsultations, deleteDraft } from '../../offline/indexedDB'
@@ -437,17 +437,40 @@ export default function NewConsultation() {
   const [isDragging, setIsDragging] = useState(false)
   const [attachmentError, setAttachmentError] = useState('')
   const [draftBanner, setDraftBanner] = useState(null) // { id, data }
+  const [patients, setPatients] = useState([])
 
-  // Load patients from mockData
-  const patients = mockData?.patients || []
+  const selectPatient = useCallback((patient) => {
+    setSelectedPatient(patient)
+    setFormData(prev => ({
+      ...prev,
+      patientId: patient.id || patient.patientId,
+      medicalHistory: {
+        ...prev.medicalHistory,
+        existingConditions: patient.medicalHistory?.conditions || patient.conditions || [],
+        knownAllergies: patient.medicalHistory?.allergies || patient.allergies || [],
+        currentMedications: patient.medicalHistory?.medications || patient.medications || [],
+      },
+    }))
+  }, [])
 
-  // On mount: check for draft and auto-select patient from route state
+  // On mount: fetch real patients, check for draft, and auto-select patient from route state
   useEffect(() => {
+    let mounted = true
+    async function loadPatientsList() {
+      try {
+        const pts = await patientService.getPatients()
+        if (mounted && Array.isArray(pts)) setPatients(pts)
+      } catch (err) {
+        console.warn('Failed to load patients for new consultation:', err)
+      }
+    }
+    loadPatientsList()
+
     // Check for draft in IndexedDB
     const checkDraft = async () => {
       try {
         const drafts = await getDraftConsultations()
-        if (drafts && drafts.length > 0) {
+        if (drafts && drafts.length > 0 && mounted) {
           setDraftBanner(drafts[0])
         }
       } catch {
@@ -464,26 +487,13 @@ export default function NewConsultation() {
         selectPatient(patient)
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+
+    return () => { mounted = false }
+  }, [location.state, patients, selectPatient])
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3500)
-  }, [])
-
-  const selectPatient = useCallback((patient) => {
-    setSelectedPatient(patient)
-    setFormData(prev => ({
-      ...prev,
-      patientId: patient.id || patient.patientId,
-      medicalHistory: {
-        ...prev.medicalHistory,
-        existingConditions: patient.medicalHistory?.conditions || patient.conditions || [],
-        knownAllergies: patient.medicalHistory?.allergies || patient.allergies || [],
-        currentMedications: patient.medicalHistory?.medications || patient.medications || [],
-      },
-    }))
   }, [])
 
   const updateSymptom = (field, value) => {
@@ -703,7 +713,7 @@ export default function NewConsultation() {
       }
 
       await saveConsultation(consultationRecord)
-      await enqueueConsultation(consultationId)
+      await enqueueConsultation(consultationId, { attachments: formData.attachments })
 
       setSubmitStatus('queued')
 

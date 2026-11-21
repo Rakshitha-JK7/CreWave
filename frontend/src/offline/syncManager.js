@@ -1,7 +1,13 @@
 /**
- * CareWave Sync Manager
- * Manages background synchronization lifecycle, sync state events, and persistent timestamps.
+ * CareWave Consolidated Sync Manager
+ * Manages background synchronization lifecycle, reactive sync state events,
+ * and low-bandwidth priority polling.
  */
+
+import { syncQueue } from '@communication/syncQueue';
+import { responseSync } from '@communication/responseSync';
+import { networkMonitor } from '@communication/networkMonitor';
+import { getPendingOutboxItems } from '@communication/localDB';
 
 class SyncManager {
   constructor() {
@@ -11,9 +17,52 @@ class SyncManager {
       pendingCount: 0,
       failedCount: 0,
       connectionStatus: typeof navigator !== 'undefined' && navigator.onLine ? 'online' : 'offline',
+      effectiveType: 'unknown',
     };
 
     this.listeners = new Set();
+    this.initSyncHooks();
+  }
+
+  initSyncHooks() {
+    // Listen to network monitor status changes
+    networkMonitor.on('change', (net) => {
+      this.updateSyncState({
+        connectionStatus: net.online ? 'online' : 'offline',
+        effectiveType: net.effectiveType,
+      });
+
+      // If connection restored, automatically kick off queue processing
+      if (net.online) {
+        this.startSync().catch(() => {});
+      }
+    });
+
+    // Listen to syncQueue state changes
+    syncQueue.on('change', async () => {
+      try {
+        const pending = await getPendingOutboxItems();
+        const pendingCount = (pending || []).length;
+        const failedCount = (pending || []).filter((i) => i.status === 'failed').length;
+
+        this.updateSyncState({
+          isSyncing: syncQueue.isProcessing,
+          pendingCount,
+          failedCount,
+        });
+      } catch (e) {
+        console.warn('Sync hook update error:', e);
+      }
+    });
+
+    // Start background response polling
+    if (typeof window !== 'undefined') {
+      try {
+        responseSync.startPolling();
+      } catch (e) {
+        console.warn('Response polling start warning:', e);
+      }
+    }
   }
 
   getSyncState() {
@@ -61,11 +110,13 @@ class SyncManager {
 
     this.updateSyncState({ isSyncing: true });
 
-    // Emulate sync cycle or invoke communication module hook
     try {
-      if (typeof window !== 'undefined' && window.__carewave_comm_sync) {
-        await window.__carewave_comm_sync();
-      }
+      // 1. Process outbound pending queue (Group 1 summaries & Group 2/3 chunked uploads)
+      await syncQueue.processQueue();
+
+      // 2. Poll for incoming doctor clinical responses
+      await responseSync.poll();
+
       this.endSync(true);
       return true;
     } catch (err) {

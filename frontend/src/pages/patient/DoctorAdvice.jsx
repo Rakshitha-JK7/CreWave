@@ -1,32 +1,48 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageSquare, Printer, Pill, Calendar, AlertTriangle, User, ArrowLeft, Shield } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { useApp } from '../../context/AppContext';
-import { mockResponses } from '../../data/mockData';
+import { useAuth } from '../../context/AuthContext';
+import { syncDoctorResponses } from '../../offline/offlineQueue';
 import { formatDate, formatDateTime } from '../../utils/formatDate';
 import EmptyState from '../../components/EmptyState';
 
 export default function DoctorAdvice() {
   const navigate = useNavigate();
-  const { currentUser } = useApp();
-  const patientId = currentUser?.id || 'PAT001';
+  const { currentUser } = useAuth();
+  const patientId = currentUser?.patientId || currentUser?.referenceId || currentUser?.id || 'PAT001';
 
-  // Load all responses
-  const responses = useMemo(() => {
-    const local = JSON.parse(localStorage.getItem('carewave_responses') || '[]');
-    const combined = [...local];
-    mockResponses.forEach((mr) => {
-      if (!combined.some((item) => item.id === mr.id || item.consultationId === mr.consultationId)) {
-        combined.push(mr);
-      }
-    });
-
-    return combined.filter((r) => r.patientId === patientId || r.consultationId === 'CON001' || r.consultationId === 'CW001');
-  }, [patientId]);
-
-  const [selectedResponse, setSelectedResponse] = useState(responses[0] || null);
+  const [responses, setResponses] = useState([]);
+  const [selectedResponse, setSelectedResponse] = useState(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadAdvice() {
+      try {
+        const res = await syncDoctorResponses().catch(() => ({ responses: [] }));
+        const local = JSON.parse(localStorage.getItem('carewave_responses') || '[]');
+        const combined = [...local];
+        if (res.responses && Array.isArray(res.responses)) {
+          res.responses.forEach((r) => {
+            if (!combined.some((item) => item.id === r.id)) {
+              combined.push(r);
+            }
+          });
+        }
+        if (mounted) {
+          setResponses(combined);
+          if (combined.length > 0 && !selectedResponse) {
+            setSelectedResponse(combined[0]);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load doctor advice:', err);
+      }
+    }
+    loadAdvice();
+    return () => { mounted = false; };
+  }, [patientId]);
 
   const activeResponse = selectedResponse || responses[0];
 

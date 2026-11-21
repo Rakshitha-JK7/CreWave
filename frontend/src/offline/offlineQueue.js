@@ -1,35 +1,34 @@
 /**
- * CareWave Offline Queue & Communication Module Adapter
+ * CareWave Consolidated Offline Queue & Communication Engine Adapter
  * 
- * INTEGRATION CONTRACT:
- * This module is the clean boundary between the UI and the low-bandwidth communication
- * engine (chunked uploads, prioritized sync over 2G, resumable transfers).
- * 
- * Functions defined here can be directly bound or extended by the communication developer's module.
+ * Unifies the frontend offline queue with the robust low-bandwidth chunking,
+ * prioritized 2G sync engine (Group 1 summary > Group 2 ECG > Group 3 attachments).
  */
 
 import {
-  saveConsultation,
-  getConsultation,
-  savePendingUpload,
-  getPendingUploads as dbGetPendingUploads,
-  removePendingUpload,
-  saveDoctorResponse,
-  getDoctorResponses,
-} from './indexedDB';
+  saveConsultation as dbSaveConsultation,
+  getConsultation as dbGetConsultation,
+  getConsultations as dbGetConsultations,
+  getPendingOutboxItems,
+  removeOutboxItem,
+  saveDoctorResponse as dbSaveDoctorResponse,
+  getDoctorResponses as dbGetDoctorResponses,
+} from '@communication/localDB';
+import { syncQueue } from '@communication/syncQueue';
+import { responseSync } from '@communication/responseSync';
+import { ComponentPriority, TransferState } from '@communication/constants';
 
 /**
- * Saves a consultation locally to IndexedDB before any network transmission attempt
+ * Saves a consultation locally to client database before any network transmission attempt
  * @param {object} consultation
  * @returns {Promise<object>}
  */
 export async function saveConsultationLocally(consultation) {
   try {
-    const saved = await saveConsultation(consultation);
+    const saved = await dbSaveConsultation(consultation);
     return { success: true, consultation: saved };
   } catch (err) {
-    console.error('saveConsultationLocally failed:', err);
-    // Fallback to localStorage if IndexedDB is blocked
+    console.warn('saveConsultationLocally IndexedDB warning, falling back to localStorage:', err);
     try {
       const key = `carewave_consultation_${consultation.id}`;
       localStorage.setItem(key, JSON.stringify(consultation));
@@ -42,50 +41,81 @@ export async function saveConsultationLocally(consultation) {
 
 /**
  * Adds a consultation to the offline upload queue with assigned priority
- * Priority: 1 (Critical clinical info, text/vitals), 2 (ECG reports), 3 (Images/large files)
+ * Group 1: Essential clinical summary & vitals (highest)
+ * Group 2: Critical diagnostic telemetry (e.g. ECG)
+ * Group 3: Non-urgent files, imaging & documents
+ * 
  * @param {string} consultationId
- * @param {object} options - Optional metadata like urgency or components
+ * @param {object} options - Optional attachments array or metadata
  * @returns {Promise<object>}
  */
 export async function enqueueConsultation(consultationId, options = {}) {
   try {
-    const consultation = await getConsultation(consultationId);
+    let consultation = await dbGetConsultation(consultationId);
 
-    const queueItem = {
-      id: `QUEUE-${consultationId}`,
-      consultationId,
-      patientName: consultation?.patientName || options.patientName || 'Unknown Patient',
-      urgency: consultation?.urgency || options.urgency || 'normal',
-      status: 'pending_upload', // 'pending_upload' | 'uploading' | 'partially_uploaded' | 'delivered' | 'failed'
-      progress: 0,
-      queuedAt: new Date().toISOString(),
-      lastAttempt: null,
-      components: [
-        { name: 'Patient Info', type: 'text', status: 'pending', priority: 1 },
-        { name: 'Symptoms & Vitals', type: 'text', status: 'pending', priority: 1 },
-        ...(consultation?.attachments?.map((att, i) => ({
-          name: att.name || `Attachment ${i + 1}`,
-          type: att.type || 'file',
-          size: att.size || 0,
-          status: 'pending',
-          priority: att.name?.toLowerCase().includes('ecg') ? 2 : 3,
-          chunksTotal: Math.ceil((att.size || 50000) / 16384),
-          chunksUploaded: 0,
-        })) || []),
-      ],
-      pendingComponents: ['Patient Info', 'Symptoms & Vitals'],
-      failedComponents: [],
-      error: null,
-    };
-
-    const saved = await savePendingUpload(queueItem);
-    
-    // Broadcast event for UI reactive updates
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('carewave:queue-updated', { detail: saved }));
+    if (!consultation) {
+      // Check localStorage fallback
+      const cached = localStorage.getItem(`carewave_consultation_${consultationId}`);
+      if (cached) {
+        consultation = JSON.parse(cached);
+      }
     }
 
-    return { success: true, queueItem: saved };
+    if (!consultation) {
+      consultation = {
+        id: consultationId,
+        consultationId,
+        patientId: options.patientId || options.patientName || 'PAT-LOCAL',
+        priority: options.urgency || 'routine',
+        clinicalSummary: options.clinicalSummary || { complaint: options.chiefComplaint || 'Consultation record' },
+        vitals: options.vitals || {},
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    // Attachments passed as File objects or descriptors
+    const rawAttachments = options.attachments || consultation.attachments || [];
+    const attachmentFiles = rawAttachments
+      .map((att) => {
+        if (att.file instanceof Blob || att.file instanceof File) {
+          return {
+            file: att.file,
+            name: att.name || att.file.name,
+            type: att.name?.toLowerCase().includes('ecg') ? 'ecg' : 'document',
+            priority: att.name?.toLowerCase().includes('ecg')
+              ? ComponentPriority.GROUP_2_CLINICAL
+              : ComponentPriority.GROUP_3_DOCUMENTS,
+          };
+        } else if (att instanceof Blob || att instanceof File) {
+          return {
+            file: att,
+            name: att.name,
+            type: att.name?.toLowerCase().includes('ecg') ? 'ecg' : 'document',
+            priority: att.name?.toLowerCase().includes('ecg')
+              ? ComponentPriority.GROUP_2_CLINICAL
+              : ComponentPriority.GROUP_3_DOCUMENTS,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    // Enqueue in consolidated sync queue
+    const { consultation: enqueuedConsult, processPromise } = await syncQueue.enqueueConsultation(
+      consultation,
+      attachmentFiles
+    );
+
+    // Broadcast reactive event
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('carewave:queue-updated', {
+          detail: { consultationId, enqueuedConsult },
+        })
+      );
+    }
+
+    return { success: true, consultation: enqueuedConsult };
   } catch (err) {
     console.error('enqueueConsultation error:', err);
     return { success: false, error: err.message };
@@ -93,15 +123,46 @@ export async function enqueueConsultation(consultationId, options = {}) {
 }
 
 /**
- * Returns all active pending uploads from local queue
+ * Returns all active pending uploads from local persistent outbox
  * @returns {Promise<Array>}
  */
 export async function getPendingUploads() {
   try {
-    const uploads = await dbGetPendingUploads();
-    return uploads || [];
+    const outboxItems = await getPendingOutboxItems();
+    if (!outboxItems || outboxItems.length === 0) {
+      return [];
+    }
+
+    return outboxItems.map((item) => {
+      const isFile = item.type !== 'summary' && item.type !== 'response_acknowledgment';
+      const total = item.totalChunks || 1;
+      const uploaded = item.uploadedChunks || 0;
+      const progress = item.status === TransferState.COMPLETED
+        ? 100
+        : item.status === TransferState.UPLOADING
+        ? Math.min(Math.round((uploaded / total) * 100), 99)
+        : 0;
+
+      return {
+        id: item.id,
+        consultationId: item.consultationId,
+        componentId: item.componentId,
+        type: item.type,
+        priority: item.priority,
+        status: item.status,
+        progress,
+        totalChunks: total,
+        uploadedChunks: uploaded,
+        error: item.lastError || null,
+        queuedAt: item.createdAt,
+        lastAttempt: item.updatedAt || item.createdAt,
+        patientName: item.payload?.patientId || item.consultationId,
+        pendingComponents: [item.type === 'summary' ? 'Essential Clinical Summary' : `Attachment (${item.type})`],
+        failedComponents: item.lastError ? [item.lastError] : [],
+      };
+    });
   } catch (err) {
-    console.warn('Failed to get pending uploads from IndexedDB, checking local state', err);
+    console.warn('Failed to retrieve pending uploads from outbox:', err);
     return [];
   }
 }
@@ -114,13 +175,27 @@ export async function getPendingUploads() {
 export async function getTransferStatus(consultationId) {
   try {
     const uploads = await getPendingUploads();
-    const match = uploads.find((u) => u.consultationId === consultationId);
-    if (match) return match;
+    const matches = uploads.filter((u) => u.consultationId === consultationId);
 
-    const consult = await getConsultation(consultationId);
+    if (matches.length > 0) {
+      const avgProgress = Math.round(
+        matches.reduce((acc, cur) => acc + cur.progress, 0) / matches.length
+      );
+      const isUploading = matches.some((m) => m.status === TransferState.UPLOADING);
+      const isFailed = matches.some((m) => m.status === TransferState.FAILED);
+
+      return {
+        consultationId,
+        status: isUploading ? 'uploading' : isFailed ? 'failed' : 'pending_upload',
+        progress: avgProgress,
+        items: matches,
+      };
+    }
+
+    const consult = await dbGetConsultation(consultationId);
     return {
       consultationId,
-      status: consult?.status || 'unknown',
+      status: consult?.status || 'delivered',
       progress: consult?.status === 'delivered' ? 100 : 0,
     };
   } catch (err) {
@@ -129,31 +204,20 @@ export async function getTransferStatus(consultationId) {
 }
 
 /**
- * Signals communication module to resume an interrupted upload
+ * Signals communication module to resume an interrupted transfer
  * @param {string} consultationId
  * @returns {Promise<object>}
  */
 export async function resumeUpload(consultationId) {
   try {
-    const uploads = await getPendingUploads();
-    const item = uploads.find((u) => u.consultationId === consultationId);
-
-    if (item) {
-      item.status = 'uploading';
-      item.progress = Math.min(item.progress + 25, 100);
-      item.lastAttempt = new Date().toISOString();
-      if (item.progress >= 100) {
-        item.status = 'delivered';
-      }
-      await savePendingUpload(item);
-
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('carewave:transfer-progress', { detail: item }));
-      }
-      return { success: true, item };
+    syncQueue.resume();
+    const promise = syncQueue.processQueue();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('carewave:transfer-progress', { detail: { consultationId, status: 'uploading' } })
+      );
     }
-
-    return { success: false, message: 'Transfer not found in queue' };
+    return { success: true, promise };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -161,30 +225,30 @@ export async function resumeUpload(consultationId) {
 
 /**
  * Retries a failed upload component or consultation
- * @param {string} consultationId
+ * @param {string} itemId
  * @returns {Promise<object>}
  */
-export async function retryUpload(consultationId) {
-  return resumeUpload(consultationId);
+export async function retryUpload(itemId) {
+  try {
+    await syncQueue.retryItem(itemId);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 }
 
 /**
  * Safely cancels a pending transfer
- * @param {string} consultationId
+ * @param {string} itemId
  * @returns {Promise<object>}
  */
-export async function cancelUpload(consultationId) {
+export async function cancelUpload(itemId) {
   try {
-    const uploads = await getPendingUploads();
-    const item = uploads.find((u) => u.consultationId === consultationId);
-    if (item) {
-      await removePendingUpload(item.id);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('carewave:queue-updated'));
-      }
-      return { success: true };
+    await removeOutboxItem(itemId);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('carewave:queue-updated'));
     }
-    return { success: false, message: 'Item not in queue' };
+    return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -192,11 +256,12 @@ export async function cancelUpload(consultationId) {
 
 /**
  * Synchronizes available doctor responses from server / storage
- * @returns {Promise<Array>}
+ * @returns {Promise<object>}
  */
 export async function syncDoctorResponses() {
   try {
-    const responses = await getDoctorResponses();
+    await responseSync.poll();
+    const responses = await dbGetDoctorResponses();
     return { success: true, responses: responses || [] };
   } catch (err) {
     return { success: false, error: err.message };

@@ -8,32 +8,52 @@ async function seed() {
   console.log('[CareWave Seed] Seeding demo users...');
   const salt = await bcrypt.genSalt(10);
   const commonPasswordHash = await bcrypt.hash('password123', salt);
+  const adminPasswordHash = await bcrypt.hash('admin123', salt);
 
   const users = [
     {
+      id: 'ADMIN-SYS-01',
+      username: 'admin',
+      email: 'admin@carewave.org',
+      passwordHash: adminPasswordHash,
+      name: 'System Administrator',
+      role: 'admin',
+      status: 'active',
+      clinicId: null,
+      contactNumber: '+91 90000 11111',
+    },
+    {
       id: 'HW-DEMO-01',
       username: 'worker1',
+      email: 'worker@carewave.org',
       passwordHash: commonPasswordHash,
       name: 'Asha Devi (Community Health Worker)',
       role: 'health_worker',
+      status: 'active',
       clinicId: 'CLINIC-RURAL-01',
       contactNumber: '+91 98765 43210',
     },
     {
       id: 'DOC-DEMO-01',
       username: 'doctor1',
+      email: 'doctor@carewave.org',
       passwordHash: commonPasswordHash,
       name: 'Dr. Ramesh Sharma (Tele-Specialist)',
       role: 'doctor',
+      status: 'active',
+      specialization: 'Cardiology & General Medicine',
+      licenseNumber: 'MED-REG-44921',
       clinicId: null,
       contactNumber: '+91 91234 56789',
     },
     {
       id: 'PAT-USER-1024',
       username: 'patient1',
+      email: 'patient@carewave.org',
       passwordHash: commonPasswordHash,
       name: 'Rajesh Kumar',
       role: 'patient',
+      status: 'active',
       clinicId: 'CLINIC-RURAL-01',
       contactNumber: '+91 99887 76655',
     },
@@ -43,11 +63,19 @@ async function seed() {
     const existing = await db.get('SELECT id FROM users WHERE id = ? OR username = ?', [u.id, u.username]);
     if (!existing) {
       await db.run(
-        `INSERT INTO users (id, username, password_hash, name, role, clinic_id, contact_number, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        [u.id, u.username, u.passwordHash, u.name, u.role, u.clinicId, u.contactNumber]
+        `INSERT INTO users (id, username, email, password_hash, name, role, status, clinic_id, contact_number, specialization, license_number, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [u.id, u.username, u.email, u.passwordHash, u.name, u.role, u.status || 'active', u.clinicId, u.contactNumber, u.specialization || null, u.licenseNumber || null]
       );
       console.log(`  + Created user: ${u.username} (${u.role})`);
+    } else {
+      await db.run(
+        `UPDATE users
+         SET email = ?, password_hash = ?, status = 'active', specialization = COALESCE(specialization, ?), license_number = COALESCE(license_number, ?), updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [u.email, u.passwordHash, u.specialization || null, u.licenseNumber || null, existing.id]
+      );
+      console.log(`  * Updated user: ${u.username} (${u.role})`);
     }
   }
 

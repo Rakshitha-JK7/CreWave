@@ -159,12 +159,13 @@ class ResponseService {
                WHERE r.delivery_status != 'acknowledged'`;
     const params = [];
 
-    if (clinicId) {
+    if (clinicId && healthWorkerId) {
+      sql += ` AND (c.clinic_id = ? OR c.health_worker_id = ?)`;
+      params.push(clinicId, healthWorkerId);
+    } else if (clinicId) {
       sql += ` AND c.clinic_id = ?`;
       params.push(clinicId);
-    }
-
-    if (healthWorkerId) {
+    } else if (healthWorkerId) {
       sql += ` AND c.health_worker_id = ?`;
       params.push(healthWorkerId);
     }

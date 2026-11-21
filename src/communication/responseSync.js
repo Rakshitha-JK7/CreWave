@@ -1,7 +1,7 @@
 import { networkSimulator } from './networkSimulator.js';
 import { defaultRetryManager } from './retryManager.js';
-import { updateConsultationStatus } from './localDB.js';
-import { ConsultationStatus } from './constants.js';
+import { updateConsultationStatus, saveDoctorResponse, addToOutbox } from './localDB.js';
+import { ConsultationStatus, TransferState } from './constants.js';
 
 export class ResponseSync {
   constructor({ apiBaseUrl = '/api', pollIntervalMs = 15000, onResponseReceived = null } = {}) {
@@ -69,10 +69,13 @@ export class ResponseSync {
   async processIncomingResponse(responseItem) {
     const { id, consultationId } = responseItem;
 
-    // Update local consultation status
+    // 1. Save response permanently in local IndexedDB first
+    await saveDoctorResponse(responseItem);
+
+    // 2. Update local consultation status
     await updateConsultationStatus(consultationId, ConsultationStatus.RESPONSE_RECEIVED);
 
-    // Acknowledge receipt to server
+    // 3. Only after durable local storage does the client acknowledge receipt
     try {
       await networkSimulator.simulatedFetch(`${this.apiBaseUrl}/responses/${id}/acknowledge`, {
         method: 'PATCH',
@@ -80,7 +83,21 @@ export class ResponseSync {
         body: JSON.stringify({ acknowledgedAt: new Date().toISOString() }),
       });
     } catch (err) {
-      console.warn(`Failed to acknowledge response ${id} immediately:`, err.message);
+      console.warn(`Failed to acknowledge response ${id} immediately, queuing in persistent outbox:`, err.message);
+      // Queue acknowledgment task in persistent outbox for retry
+      try {
+        await addToOutbox({
+          id: `outbox-ack-${id}`,
+          type: 'response_acknowledgment',
+          priority: 1,
+          responseId: id,
+          consultationId,
+          status: TransferState.PENDING,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (outboxErr) {
+        console.warn('Could not enqueue acknowledgment:', outboxErr.message);
+      }
     }
 
     if (this.onResponseReceived) {

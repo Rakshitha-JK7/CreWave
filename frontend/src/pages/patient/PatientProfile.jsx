@@ -1,17 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User, Phone, MapPin, Heart, Shield, Edit2, CheckCircle, X, AlertCircle } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { useApp } from '../../context/AppContext';
-import { mockPatients } from '../../data/mockData';
+import { useAuth } from '../../context/AuthContext';
+import patientService from '../../services/patientService';
 
 export default function PatientProfile() {
-  const { currentUser, addNotification } = useApp();
-  const basePatient = mockPatients.find((p) => p.id === currentUser?.id) || mockPatients[0];
+  const { currentUser } = useAuth();
 
-  const [patient, setPatient] = useState(() => {
-    const saved = localStorage.getItem(`carewave_patient_profile_${basePatient.id}`);
-    return saved ? JSON.parse(saved) : basePatient;
+  const [patient, setPatient] = useState({
+    id: currentUser?.patientId || currentUser?.referenceId || currentUser?.id || 'PAT001',
+    name: currentUser?.name || 'Patient',
+    age: currentUser?.age || 35,
+    sex: currentUser?.sex || 'Male',
+    village: currentUser?.village || 'Rural Center',
+    phone: currentUser?.phone || currentUser?.contactNumber || '+91 98765 43210',
+    bloodGroup: currentUser?.bloodGroup || 'B+',
+    emergencyContact: {
+      name: 'Primary Contact',
+      phone: '+91 98765 43211',
+      relation: 'Family',
+    },
+    conditions: [],
+    allergies: [],
+    medications: [],
   });
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadFullProfile() {
+      if (currentUser?.patientId || currentUser?.referenceId) {
+        const id = currentUser.patientId || currentUser.referenceId;
+        const p = await patientService.getPatient(id).catch(() => null);
+        if (mounted && p) {
+          setPatient((prev) => ({ ...prev, ...p }));
+        }
+      }
+    }
+    loadFullProfile();
+    return () => { mounted = false; };
+  }, [currentUser]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({

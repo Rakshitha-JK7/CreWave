@@ -1,67 +1,244 @@
-import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
-import LoadingSpinner from './components/LoadingSpinner'
+import { lazy, Suspense } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import LoadingSpinner from './components/LoadingSpinner';
+import ProtectedRoute from './components/ProtectedRoute';
+import { AuthProvider } from './context/AuthContext';
 
-const Home = lazy(() => import('./pages/Home'))
-const PatientDashboard = lazy(() => import('./pages/patient/PatientDashboard'))
-const PatientProfile = lazy(() => import('./pages/patient/PatientProfile'))
-const PatientConsultations = lazy(() => import('./pages/patient/PatientConsultations'))
-const MedicalRecords = lazy(() => import('./pages/patient/MedicalRecords'))
-const DoctorAdvice = lazy(() => import('./pages/patient/DoctorAdvice'))
-const PatientNotifications = lazy(() => import('./pages/patient/Notifications'))
+const Home = lazy(() => import('./pages/Home'));
+const Login = lazy(() => import('./pages/auth/Login'));
+const Register = lazy(() => import('./pages/auth/Register'));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 
-const HealthWorkerDashboard = lazy(() => import('./pages/healthWorker/HealthWorkerDashboard'))
-const RegisterPatient = lazy(() => import('./pages/healthWorker/RegisterPatient'))
-const PatientRecordsHW = lazy(() => import('./pages/healthWorker/PatientRecords'))
-const NewConsultation = lazy(() => import('./pages/healthWorker/NewConsultation'))
-const ConsultationHistory = lazy(() => import('./pages/healthWorker/ConsultationHistory'))
-const PendingUploads = lazy(() => import('./pages/healthWorker/PendingUploads'))
-const DoctorResponses = lazy(() => import('./pages/healthWorker/DoctorResponses'))
-const NetworkMonitor = lazy(() => import('./pages/healthWorker/NetworkMonitor'))
+// Patient pages
+const PatientDashboard = lazy(() => import('./pages/patient/PatientDashboard'));
+const PatientProfile = lazy(() => import('./pages/patient/PatientProfile'));
+const PatientConsultations = lazy(() => import('./pages/patient/PatientConsultations'));
+const MedicalRecords = lazy(() => import('./pages/patient/MedicalRecords'));
+const DoctorAdvice = lazy(() => import('./pages/patient/DoctorAdvice'));
+const PatientNotifications = lazy(() => import('./pages/patient/Notifications'));
 
-const DoctorDashboard = lazy(() => import('./pages/doctor/DoctorDashboard'))
-const IncomingConsultations = lazy(() => import('./pages/doctor/IncomingConsultations'))
-const ConsultationDetails = lazy(() => import('./pages/doctor/ConsultationDetails'))
-const ReviewedCases = lazy(() => import('./pages/doctor/ReviewedCases'))
-const DoctorPatientRecords = lazy(() => import('./pages/doctor/PatientRecords'))
-const ResponseForm = lazy(() => import('./pages/doctor/ResponseForm'))
-const DoctorNotifications = lazy(() => import('./pages/doctor/DoctorNotifications'))
+// Health Worker pages
+const HealthWorkerDashboard = lazy(() => import('./pages/healthWorker/HealthWorkerDashboard'));
+const RegisterPatient = lazy(() => import('./pages/healthWorker/RegisterPatient'));
+const PatientRecordsHW = lazy(() => import('./pages/healthWorker/PatientRecords'));
+const NewConsultation = lazy(() => import('./pages/healthWorker/NewConsultation'));
+const ConsultationHistory = lazy(() => import('./pages/healthWorker/ConsultationHistory'));
+const PendingUploads = lazy(() => import('./pages/healthWorker/PendingUploads'));
+const DoctorResponses = lazy(() => import('./pages/healthWorker/DoctorResponses'));
+const NetworkMonitor = lazy(() => import('./pages/healthWorker/NetworkMonitor'));
+
+// Doctor pages
+const DoctorDashboard = lazy(() => import('./pages/doctor/DoctorDashboard'));
+const IncomingConsultations = lazy(() => import('./pages/doctor/IncomingConsultations'));
+const ConsultationDetails = lazy(() => import('./pages/doctor/ConsultationDetails'));
+const ReviewedCases = lazy(() => import('./pages/doctor/ReviewedCases'));
+const DoctorPatientRecords = lazy(() => import('./pages/doctor/PatientRecords'));
+const ResponseForm = lazy(() => import('./pages/doctor/ResponseForm'));
+const DoctorNotifications = lazy(() => import('./pages/doctor/DoctorNotifications'));
 
 export default function App() {
   return (
-    <Suspense fallback={<div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh'}}><LoadingSpinner size="lg" text="Loading CareWave..." /></div>}>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        
-        {/* Patient Routes */}
-        <Route path="/patient" element={<PatientDashboard />} />
-        <Route path="/patient/profile" element={<PatientProfile />} />
-        <Route path="/patient/consultations" element={<PatientConsultations />} />
-        <Route path="/patient/records" element={<MedicalRecords />} />
-        <Route path="/patient/advice" element={<DoctorAdvice />} />
-        <Route path="/patient/notifications" element={<PatientNotifications />} />
+    <AuthProvider>
+      <Suspense
+        fallback={
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+            <LoadingSpinner size="lg" text="Loading CareWave..." />
+          </div>
+        }
+      >
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-        {/* Health Worker Routes */}
-        <Route path="/health-worker" element={<HealthWorkerDashboard />} />
-        <Route path="/health-worker/register-patient" element={<RegisterPatient />} />
-        <Route path="/health-worker/patients" element={<PatientRecordsHW />} />
-        <Route path="/health-worker/new-consultation" element={<NewConsultation />} />
-        <Route path="/health-worker/consultations" element={<ConsultationHistory />} />
-        <Route path="/health-worker/pending-uploads" element={<PendingUploads />} />
-        <Route path="/health-worker/responses" element={<DoctorResponses />} />
-        <Route path="/health-worker/network" element={<NetworkMonitor />} />
+          {/* Admin Routes */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Doctor Routes */}
-        <Route path="/doctor" element={<DoctorDashboard />} />
-        <Route path="/doctor/incoming" element={<IncomingConsultations />} />
-        <Route path="/doctor/consultation/:id" element={<ConsultationDetails />} />
-        <Route path="/doctor/reviewed" element={<ReviewedCases />} />
-        <Route path="/doctor/patients" element={<DoctorPatientRecords />} />
-        <Route path="/doctor/response/:id" element={<ResponseForm />} />
-        <Route path="/doctor/notifications" element={<DoctorNotifications />} />
+          {/* Patient Routes */}
+          <Route
+            path="/patient"
+            element={
+              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+                <PatientDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/profile"
+            element={
+              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+                <PatientProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/consultations"
+            element={
+              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+                <PatientConsultations />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/records"
+            element={
+              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+                <MedicalRecords />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/advice"
+            element={
+              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+                <DoctorAdvice />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/notifications"
+            element={
+              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+                <PatientNotifications />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Suspense>
-  )
+          {/* Health Worker Routes */}
+          <Route
+            path="/health-worker"
+            element={
+              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+                <HealthWorkerDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/health-worker/register-patient"
+            element={
+              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+                <RegisterPatient />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/health-worker/patients"
+            element={
+              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+                <PatientRecordsHW />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/health-worker/new-consultation"
+            element={
+              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+                <NewConsultation />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/health-worker/consultations"
+            element={
+              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+                <ConsultationHistory />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/health-worker/pending-uploads"
+            element={
+              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+                <PendingUploads />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/health-worker/responses"
+            element={
+              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+                <DoctorResponses />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/health-worker/network"
+            element={
+              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+                <NetworkMonitor />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Doctor Routes */}
+          <Route
+            path="/doctor"
+            element={
+              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+                <DoctorDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/incoming"
+            element={
+              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+                <IncomingConsultations />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/consultation/:id"
+            element={
+              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+                <ConsultationDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/reviewed"
+            element={
+              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+                <ReviewedCases />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/patients"
+            element={
+              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+                <DoctorPatientRecords />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/response/:id"
+            element={
+              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+                <ResponseForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/notifications"
+            element={
+              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+                <DoctorNotifications />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </AuthProvider>
+  );
 }

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Users, Eye, Phone, MapPin, X, FileText } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { mockPatients, mockConsultations } from '../../data/mockData';
+import patientService from '../../services/patientService';
 import { formatDate } from '../../utils/formatDate';
 import EmptyState from '../../components/EmptyState';
 
@@ -10,12 +10,33 @@ export default function DoctorPatientRecords() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patients, setPatients] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredPatients = mockPatients.filter((p) => {
+  useEffect(() => {
+    let mounted = true;
+    async function fetchPatients() {
+      try {
+        const pts = await patientService.getPatients();
+        if (mounted && Array.isArray(pts)) {
+          setPatients(pts);
+        }
+      } catch (err) {
+        console.warn('Failed to load doctor patient records:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    fetchPatients();
+    return () => { mounted = false; };
+  }, []);
+
+  const filteredPatients = patients.filter((p) => {
     const q = searchQuery.toLowerCase();
     return (
       p.name?.toLowerCase().includes(q) ||
       p.id?.toLowerCase().includes(q) ||
+      p.referenceId?.toLowerCase().includes(q) ||
       p.village?.toLowerCase().includes(q)
     );
   });
