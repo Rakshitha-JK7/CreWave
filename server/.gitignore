@@ -1,0 +1,11 @@
+node_modules/
+.env
+carewave.db
+carewave.db-wal
+carewave.db-shm
+uploads/chunks/*
+!uploads/chunks/.gitkeep
+uploads/completed/*
+!uploads/completed/.gitkeep
+*.log
+.DS_Store
