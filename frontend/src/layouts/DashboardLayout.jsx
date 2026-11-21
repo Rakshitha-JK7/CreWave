@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { X, CheckCircle, AlertTriangle, AlertCircle, Info } from 'lucide-react';
 
 const titleMap = {
@@ -99,13 +100,15 @@ function ToastContainer({ notifications, onDismiss }) {
   );
 }
 
-export default function DashboardLayout({ role = 'healthWorker', children }) {
+export default function DashboardLayout({ role, children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth <= 768 : false
   );
   const location = useLocation();
   const { state, dismissNotification } = useApp() || {};
+  const { currentUser } = useAuth() || {};
+  const effectiveRole = role || currentUser?.role || 'health_worker';
 
   useEffect(() => {
     const handleResize = () => {
@@ -134,7 +137,7 @@ export default function DashboardLayout({ role = 'healthWorker', children }) {
 
   return (
     <div className="dashboard-layout" style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-      <Sidebar role={role} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar role={effectiveRole} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       
       <div
         className="main-content"

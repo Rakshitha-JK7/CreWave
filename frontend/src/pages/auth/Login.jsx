@@ -39,18 +39,25 @@ export default function Login() {
 
       const userRole = res.user?.role;
 
-      // Redirect to target path if authorized, or role's main dashboard
-      if (from && !from.includes('/login') && !from.includes('/register')) {
+      // Only redirect to `from` if `from` belongs to the user's authoritative role!
+      const isAllowedFrom = from && (
+        (userRole === 'admin' && from.startsWith('/admin')) ||
+        (userRole === 'doctor' && from.startsWith('/doctor')) ||
+        (userRole === 'health_worker' && from.startsWith('/health-worker')) ||
+        (userRole === 'patient' && from.startsWith('/patient'))
+      );
+
+      if (isAllowedFrom) {
         navigate(from, { replace: true });
         return;
       }
 
-      if (userRole === 'doctor') {
+      if (userRole === 'admin') {
+        navigate('/admin', { replace: true });
+      } else if (userRole === 'doctor') {
         navigate('/doctor', { replace: true });
       } else if (userRole === 'health_worker') {
         navigate('/health-worker', { replace: true });
-      } else if (userRole === 'admin') {
-        navigate('/admin', { replace: true });
       } else {
         navigate('/patient', { replace: true });
       }

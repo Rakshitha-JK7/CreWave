@@ -68,7 +68,7 @@ export default function App() {
           <Route
             path="/patient"
             element={
-              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+              <ProtectedRoute allowedRoles={['patient']}>
                 <PatientDashboard />
               </ProtectedRoute>
             }
@@ -76,7 +76,7 @@ export default function App() {
           <Route
             path="/patient/profile"
             element={
-              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+              <ProtectedRoute allowedRoles={['patient']}>
                 <PatientProfile />
               </ProtectedRoute>
             }
@@ -84,7 +84,7 @@ export default function App() {
           <Route
             path="/patient/consultations"
             element={
-              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+              <ProtectedRoute allowedRoles={['patient']}>
                 <PatientConsultations />
               </ProtectedRoute>
             }
@@ -92,7 +92,7 @@ export default function App() {
           <Route
             path="/patient/records"
             element={
-              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+              <ProtectedRoute allowedRoles={['patient']}>
                 <MedicalRecords />
               </ProtectedRoute>
             }
@@ -100,7 +100,7 @@ export default function App() {
           <Route
             path="/patient/advice"
             element={
-              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+              <ProtectedRoute allowedRoles={['patient']}>
                 <DoctorAdvice />
               </ProtectedRoute>
             }
@@ -108,7 +108,7 @@ export default function App() {
           <Route
             path="/patient/notifications"
             element={
-              <ProtectedRoute allowedRoles={['patient', 'admin']}>
+              <ProtectedRoute allowedRoles={['patient']}>
                 <PatientNotifications />
               </ProtectedRoute>
             }
@@ -118,7 +118,7 @@ export default function App() {
           <Route
             path="/health-worker"
             element={
-              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+              <ProtectedRoute allowedRoles={['health_worker']}>
                 <HealthWorkerDashboard />
               </ProtectedRoute>
             }
@@ -126,7 +126,7 @@ export default function App() {
           <Route
             path="/health-worker/register-patient"
             element={
-              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+              <ProtectedRoute allowedRoles={['health_worker']}>
                 <RegisterPatient />
               </ProtectedRoute>
             }
@@ -134,7 +134,7 @@ export default function App() {
           <Route
             path="/health-worker/patients"
             element={
-              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+              <ProtectedRoute allowedRoles={['health_worker']}>
                 <PatientRecordsHW />
               </ProtectedRoute>
             }
@@ -142,7 +142,7 @@ export default function App() {
           <Route
             path="/health-worker/new-consultation"
             element={
-              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+              <ProtectedRoute allowedRoles={['health_worker']}>
                 <NewConsultation />
               </ProtectedRoute>
             }
@@ -150,7 +150,7 @@ export default function App() {
           <Route
             path="/health-worker/consultations"
             element={
-              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+              <ProtectedRoute allowedRoles={['health_worker']}>
                 <ConsultationHistory />
               </ProtectedRoute>
             }
@@ -158,7 +158,7 @@ export default function App() {
           <Route
             path="/health-worker/pending-uploads"
             element={
-              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+              <ProtectedRoute allowedRoles={['health_worker']}>
                 <PendingUploads />
               </ProtectedRoute>
             }
@@ -166,7 +166,7 @@ export default function App() {
           <Route
             path="/health-worker/responses"
             element={
-              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+              <ProtectedRoute allowedRoles={['health_worker']}>
                 <DoctorResponses />
               </ProtectedRoute>
             }
@@ -174,7 +174,7 @@ export default function App() {
           <Route
             path="/health-worker/network"
             element={
-              <ProtectedRoute allowedRoles={['health_worker', 'admin']}>
+              <ProtectedRoute allowedRoles={['health_worker']}>
                 <NetworkMonitor />
               </ProtectedRoute>
             }
@@ -184,7 +184,7 @@ export default function App() {
           <Route
             path="/doctor"
             element={
-              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+              <ProtectedRoute allowedRoles={['doctor']}>
                 <DoctorDashboard />
               </ProtectedRoute>
             }
@@ -192,7 +192,7 @@ export default function App() {
           <Route
             path="/doctor/incoming"
             element={
-              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+              <ProtectedRoute allowedRoles={['doctor']}>
                 <IncomingConsultations />
               </ProtectedRoute>
             }
@@ -200,7 +200,7 @@ export default function App() {
           <Route
             path="/doctor/consultation/:id"
             element={
-              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+              <ProtectedRoute allowedRoles={['doctor']}>
                 <ConsultationDetails />
               </ProtectedRoute>
             }
@@ -208,7 +208,7 @@ export default function App() {
           <Route
             path="/doctor/reviewed"
             element={
-              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+              <ProtectedRoute allowedRoles={['doctor']}>
                 <ReviewedCases />
               </ProtectedRoute>
             }
@@ -216,7 +216,7 @@ export default function App() {
           <Route
             path="/doctor/patients"
             element={
-              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+              <ProtectedRoute allowedRoles={['doctor']}>
                 <DoctorPatientRecords />
               </ProtectedRoute>
             }
@@ -224,7 +224,7 @@ export default function App() {
           <Route
             path="/doctor/response/:id"
             element={
-              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+              <ProtectedRoute allowedRoles={['doctor']}>
                 <ResponseForm />
               </ProtectedRoute>
             }
@@ -232,7 +232,7 @@ export default function App() {
           <Route
             path="/doctor/notifications"
             element={
-              <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+              <ProtectedRoute allowedRoles={['doctor']}>
                 <DoctorNotifications />
               </ProtectedRoute>
             }
