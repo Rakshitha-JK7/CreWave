@@ -15,6 +15,7 @@ const doctorRoutes = require('./routes/doctor');
 const uploadRoutes = require('./routes/uploads');
 const responseRoutes = require('./routes/responses');
 const syncRoutes = require('./routes/sync');
+const medicalRecordsRoutes = require('./routes/medicalRecords');
 
 const app = express();
 
@@ -76,6 +77,7 @@ app.use(`${config.apiPrefix}/doctor`, doctorRoutes);
 app.use(`${config.apiPrefix}/uploads`, uploadRoutes);
 app.use(`${config.apiPrefix}/responses`, responseRoutes);
 app.use(`${config.apiPrefix}/sync`, syncRoutes);
+app.use(`${config.apiPrefix}/medical-records`, medicalRecordsRoutes);
 
 // Catch 404s
 app.use(notFoundHandler);

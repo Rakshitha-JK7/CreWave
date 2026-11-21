@@ -4,6 +4,7 @@ import DashboardLayout from '../../layouts/DashboardLayout';
 import useNetworkStatus from '../../hooks/useNetworkStatus';
 import { useApp } from '../../context/AppContext';
 import syncManager from '../../offline/syncManager';
+import adaptiveBandwidthManager from '../../telemetry/adaptiveBandwidthManager';
 
 export default function NetworkMonitor() {
   const { status, effectiveType, pingLatency, isOnline, checkNow } = useNetworkStatus();
@@ -176,6 +177,49 @@ export default function NetworkMonitor() {
                 Healthy
               </div>
               <span style={{ fontSize: 12, color: '#94a3b8' }}>IndexedDB Store (carewave-db)</span>
+            </div>
+          </div>
+        </div>
+
+        {/* CareBridge Unified 2G Architecture Card */}
+        <div className="card" style={{ marginBottom: 24, padding: 20, backgroundColor: '#f0fdf4', border: '1px solid #86efac' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <ShieldCheck size={20} color="#16a34a" />
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+              CareBridge Adaptive Bandwidth & Unified 2G GSM Engine
+            </h3>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginTop: 12 }}>
+            <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #bbf7d0' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>NETWORK CLASSIFICATION</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                {adaptiveBandwidthManager.getState().classification}
+              </div>
+              <div style={{ fontSize: 11, color: '#16a34a', marginTop: 2 }}>Real-time 2G/EDGE adaptation</div>
+            </div>
+
+            <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #bbf7d0' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>MEASURED THROUGHPUT</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#0284c7', marginTop: 2 }}>
+                {adaptiveBandwidthManager.getState().throughputKbps} kbps
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Actual mobile upload rate</div>
+            </div>
+
+            <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #bbf7d0' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>REQUEST TIMEOUT</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#d97706', marginTop: 2 }}>
+                {Math.round(adaptiveBandwidthManager.getState().recommendedTimeoutMs / 1000)}s
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Dynamic timeout margin</div>
+            </div>
+
+            <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #bbf7d0' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>GZIP COMPRESSION</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#7c3aed', marginTop: 2 }}>
+                Level {adaptiveBandwidthManager.getState().recommendedLevel} (Lossless)
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Optimized for 2G bandwidth</div>
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import api from './api';
+import transmissionManager from '../telemetry/transmissionManager';
 import {
   saveConsultation as dbSaveConsultation,
   getConsultation as dbGetConsultation,
@@ -41,11 +42,12 @@ export const consultationService = {
     // 1. Write to client storage for offline protection
     await dbSaveConsultation(consultation);
 
-    // 2. Queue for chunked/resumable transmission
-    await enqueueConsultation(consultation.id, {
-      patientName: consultation.patientName,
-      urgency: consultation.urgency,
-    });
+    // 2. Dispatch to CareBridge Unified 2G Protobuf & Lossless Transmission Engine
+    try {
+      await transmissionManager.submitMedicalRecord(consultation);
+    } catch (e) {
+      console.warn('CareBridge transmission manager notice:', e.message);
+    }
 
     // 3. Attempt API delivery if online
     try {

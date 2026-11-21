@@ -37,11 +37,12 @@ class Migrator {
       const filePath = path.join(migrationsDir, file);
       const sqlContent = fs.readFileSync(filePath, 'utf8');
 
-      // Split statements on semicolon
-      const statements = sqlContent
+      // Strip comments and split statements on semicolon
+      const cleanSql = sqlContent.replace(/--[^\r\n]*/g, '');
+      const statements = cleanSql
         .split(';')
         .map(s => s.trim())
-        .filter(s => s.length > 0 && !s.startsWith('--'));
+        .filter(s => s.length > 0);
 
       for (const stmt of statements) {
         try {

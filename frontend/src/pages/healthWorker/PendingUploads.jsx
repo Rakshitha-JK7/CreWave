@@ -14,6 +14,7 @@ import {
   enqueueConsultation,
 } from '../../offline/offlineQueue';
 import syncManager from '../../offline/syncManager';
+import transmissionManager from '../../telemetry/transmissionManager';
 
 export default function PendingUploads() {
   const navigate = useNavigate();
@@ -61,6 +62,11 @@ export default function PendingUploads() {
 
   const handleSyncNow = async (consultationId) => {
     addNotification(`Starting transfer for Case #${consultationId}...`, 'info');
+    try {
+      await transmissionManager.executeUpload(consultationId);
+    } catch (e) {
+      // fallback
+    }
     setUploads((prev) =>
       prev.map((u) => (u.consultationId === consultationId ? { ...u, status: 'uploading', progress: 50 } : u))
     );

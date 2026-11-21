@@ -3,7 +3,6 @@ const db = require('../models/db');
 async function migrate() {
   console.log('[CareWave Migration] Starting database migration...');
   await db.init();
-  await db.createTables();
   console.log('[CareWave Migration] Migration completed successfully.');
 }
 

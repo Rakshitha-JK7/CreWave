@@ -806,7 +806,7 @@ export default function NewConsultation() {
         isDraft: false,
         status: 'available_to_doctor',
         createdAt: new Date().toISOString(),
-        attachments: (formData.attachments || []).map(({ file, ...rest }) => rest),
+        attachments: formData.attachments || [],
       }
 
       // Always save to IndexedDB and post to /api/consultations

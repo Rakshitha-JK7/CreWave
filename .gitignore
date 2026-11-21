@@ -11,10 +11,17 @@ node_modules/
 *.db-shm
 
 # Uploads
+uploads/*
+!uploads/.gitkeep
 server/uploads/chunks/*
 !server/uploads/chunks/.gitkeep
 server/uploads/completed/*
 !server/uploads/completed/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+ai-service/__pycache__/
 
 # Logs
 *.log

@@ -318,6 +318,8 @@ class ConsultationService {
       },
       attachments: attachments.map(a => ({
         ...a,
+        url: a.uploadStatus === 'completed' ? `/api/medical-records/attachments/${a.id}/original` : null,
+        originalUrl: `/api/medical-records/attachments/${a.id}/original`,
         isCompleted: a.uploadStatus === 'completed',
       })),
       attachmentStats: {
