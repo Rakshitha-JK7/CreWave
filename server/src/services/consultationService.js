@@ -7,12 +7,21 @@ class ConsultationService {
    * Create or idempotently return a consultation
    */
   async createConsultation(payload, healthWorkerId = null) {
+    const consultationId = payload.consultationId || payload.id;
+    const finalConsultationId = consultationId || `CW-${uuidv4().substring(0, 8).toUpperCase()}`;
+    const idempotencyKey = payload.idempotencyKey;
+    const priority = payload.priority || payload.urgency || 'normal';
+
+    if (!idempotencyKey) {
+      const err = new Error('idempotencyKey is required for offline-first transmission.');
+      err.statusCode = 400;
+      err.code = 'IDEMPOTENCY_KEY_REQUIRED';
+      throw err;
+    }
+
     const {
-      consultationId,
-      idempotencyKey,
       patientId,
       clinicId = 'CLINIC-RURAL-01',
-      priority = 'normal',
       urgencyCategory,
       immediateAction,
       measurementsUnavailable,
@@ -21,13 +30,6 @@ class ConsultationService {
       vitals = {},
       attachments = [],
     } = payload;
-
-    if (!idempotencyKey) {
-      const err = new Error('idempotencyKey is required for offline-first transmission.');
-      err.statusCode = 400;
-      err.code = 'IDEMPOTENCY_KEY_REQUIRED';
-      throw err;
-    }
 
     // 1. Idempotency Check: prevent duplicate consultation on network retry
     const existing = await db.get(
@@ -68,7 +70,6 @@ class ConsultationService {
       }
     }
 
-    const finalConsultationId = consultationId || `CW-${uuidv4().substring(0, 8).toUpperCase()}`;
     const finalHwId = healthWorkerId || payload.healthWorkerId || 'HW-DEMO-01';
 
     // Normalize clinical summary fields
@@ -376,6 +377,76 @@ class ConsultationService {
     await db.run(sql, params);
 
     return this.getConsultationById(id);
+  }
+
+  /**
+   * General list of consultations for health worker and patient dashboards
+   */
+  async getConsultationsList({ status, priority, clinicId, patientId, limit = 50, offset = 0 } = {}) {
+    let sql = `SELECT c.*,
+                      p.reference_id as "patientReferenceId", p.name as "patientName",
+                      p.age as "patientAge", p.sex as "patientSex", p.village as "patientVillage",
+                      p.contact_number as "patientContact"
+               FROM consultations c
+               LEFT JOIN patients p ON c.patient_id = p.id
+               WHERE 1=1`;
+    const params = [];
+
+    if (status && status !== 'all') {
+      sql += ` AND c.status = ?`;
+      params.push(status);
+    }
+
+    if (priority && priority !== 'all') {
+      sql += ` AND (c.priority = ? OR c.urgency_category = ?)`;
+      params.push(priority, priority);
+    }
+
+    if (clinicId) {
+      sql += ` AND c.clinic_id = ?`;
+      params.push(clinicId);
+    }
+
+    if (patientId) {
+      sql += ` AND (c.patient_id = ? OR p.reference_id = ?)`;
+      params.push(patientId, patientId);
+    }
+
+    sql += ` ORDER BY c.consultation_date DESC LIMIT ? OFFSET ?`;
+    params.push(parseInt(limit, 10), parseInt(offset, 10));
+
+    const rows = await db.all(sql, params);
+
+    return rows.map(r => {
+      let vitals = {};
+      if (r.vitals) {
+        try {
+          vitals = typeof r.vitals === 'string' ? JSON.parse(r.vitals) : r.vitals;
+        } catch (e) {
+          vitals = {};
+        }
+      }
+
+      return {
+        id: r.id,
+        consultationId: r.id,
+        patientId: r.patient_id,
+        patientName: r.patientName || r.patientReferenceId,
+        healthWorkerId: r.health_worker_id,
+        clinicId: r.clinic_id,
+        priority: r.priority,
+        urgency: r.priority,
+        urgencyCategory: r.urgency_category,
+        status: r.status,
+        syncStatus: r.sync_status,
+        mainComplaint: r.main_complaint,
+        symptoms: r.symptoms,
+        vitals,
+        consultationDate: r.consultation_date,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      };
+    });
   }
 
   /**

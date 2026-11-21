@@ -18,6 +18,9 @@ export const consultationService = {
       createdAt: consultationData.createdAt || new Date().toISOString(),
       status: 'pending_upload',
     };
+    if (!consultation.idempotencyKey) {
+      consultation.idempotencyKey = `IDEMP-${consultation.id}`;
+    }
 
     // 1. Always write to client storage first (No data loss principle)
     await dbSaveConsultation(consultation);
@@ -31,8 +34,13 @@ export const consultationService = {
     // 3. Attempt API delivery if online
     try {
       const response = await api.post('/consultations', consultation);
+      const serverData = response.data?.data || response.data;
       // If server confirmed receipt:
-      const updated = { ...consultation, status: 'delivered', serverId: response.data?.id };
+      const updated = {
+        ...consultation,
+        status: 'delivered',
+        serverId: serverData?.id || serverData?.consultationId || response.data?.id,
+      };
       await dbSaveConsultation(updated);
       return { success: true, data: updated, deliveredNow: true };
     } catch (err) {
@@ -52,7 +60,7 @@ export const consultationService = {
   async getConsultations(params = {}) {
     try {
       const response = await api.get('/consultations', { params });
-      return response.data;
+      return Array.isArray(response.data) ? response.data : (response.data?.data || []);
     } catch (err) {
       // Local & mock fallback
       const local = await dbGetAllConsultations();
@@ -85,7 +93,7 @@ export const consultationService = {
   async getConsultation(id) {
     try {
       const response = await api.get(`/consultations/${id}`);
-      return response.data;
+      return response.data?.data || response.data;
     } catch (err) {
       const local = await dbGetConsultation(id);
       if (local) return local;
@@ -101,8 +109,9 @@ export const consultationService = {
   async updateConsultation(id, updates) {
     try {
       const response = await api.patch(`/consultations/${id}`, updates);
-      await dbSaveConsultation(response.data);
-      return { success: true, data: response.data };
+      const data = response.data?.data || response.data;
+      await dbSaveConsultation(data);
+      return { success: true, data };
     } catch (err) {
       const existing = await this.getConsultation(id);
       if (existing) {
@@ -120,7 +129,7 @@ export const consultationService = {
   async getConsultationSyncStatus(id) {
     try {
       const response = await api.get(`/consultations/${id}/sync-status`);
-      return response.data;
+      return response.data?.data || response.data;
     } catch (err) {
       return getTransferStatus(id);
     }

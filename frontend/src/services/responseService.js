@@ -1,6 +1,7 @@
 /**
  * Service for Doctor Response submission and management
  */
+import api from './api';
 import { mockResponses } from '../data/mockData';
 
 export const responseService = {
@@ -11,8 +12,25 @@ export const responseService = {
    */
   async submitResponse(consultationId, responseData) {
     try {
+      const payload = {
+        assessment: responseData.assessment,
+        recommendations: responseData.recommendations,
+        prescription: responseData.prescription || responseData.prescriptions || [],
+        followUpInstructions: responseData.followUpInstructions,
+        referral: responseData.referral,
+        healthWorkerInstructions: responseData.healthWorkerInstructions,
+      };
+
+      let apiResponse = null;
+      try {
+        const res = await api.post(`/consultations/${consultationId}/responses`, payload);
+        apiResponse = res.data?.data || res.data;
+      } catch (networkErr) {
+        console.info('Response saved locally for sync:', networkErr.userMessage || networkErr.message);
+      }
+
       // Check local storage / mock state
-      const newResponse = {
+      const newResponse = apiResponse || {
         id: `RES-${Date.now()}`,
         consultationId,
         doctorId: 'DOC001',
@@ -90,6 +108,18 @@ export const responseService = {
    */
   async getResponseByConsultationId(consultationId) {
     try {
+      try {
+        const res = await api.get(`/consultations/${consultationId}/responses`);
+        const data = res.data?.data || res.data;
+        if (Array.isArray(data) && data.length > 0) {
+          return data[data.length - 1];
+        } else if (data && !Array.isArray(data)) {
+          return data;
+        }
+      } catch (e) {
+        // Fallback to local / mock
+      }
+
       const stored = JSON.parse(localStorage.getItem('carewave_responses') || '[]');
       const local = stored.find((r) => r.consultationId === consultationId);
       if (local) return local;

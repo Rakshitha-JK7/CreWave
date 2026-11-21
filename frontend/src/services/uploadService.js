@@ -15,7 +15,7 @@ export const uploadService = {
   async initUpload(metadata) {
     try {
       const response = await api.post('/uploads/init', metadata);
-      return response.data; // { uploadId, chunkSize, totalChunks }
+      return response.data?.data || response.data; // { uploadId, chunkSize, totalChunks }
     } catch (err) {
       // Mock session for offline simulation
       return {
@@ -38,7 +38,7 @@ export const uploadService = {
       const response = await api.put(`/uploads/${uploadId}/chunks/${chunkIndex}`, chunkData, {
         headers: { 'Content-Type': 'application/octet-stream' },
       });
-      return response.data;
+      return response.data?.data || response.data;
     } catch (err) {
       return { success: true, chunkIndex, simulated: true };
     }
@@ -51,7 +51,7 @@ export const uploadService = {
   async getUploadStatus(uploadId) {
     try {
       const response = await api.get(`/uploads/${uploadId}/status`);
-      return response.data; // { uploadedChunks: [0, 1, 2], complete: false }
+      return response.data?.data || response.data; // { uploadedChunks: [0, 1, 2], complete: false }
     } catch (err) {
       return { uploadedChunks: [], complete: false, simulated: true };
     }
@@ -61,10 +61,10 @@ export const uploadService = {
    * Finalize and assemble chunks on server
    * @param {string} uploadId
    */
-  async completeUpload(uploadId) {
+  async completeUpload(uploadId, options = {}) {
     try {
-      const response = await api.post(`/uploads/${uploadId}/complete`);
-      return response.data;
+      const response = await api.post(`/uploads/${uploadId}/complete`, options);
+      return response.data?.data || response.data;
     } catch (err) {
       return { success: true, uploadId, verified: true, simulated: true };
     }

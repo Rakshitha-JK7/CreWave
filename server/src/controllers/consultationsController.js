@@ -4,8 +4,16 @@ class ConsultationsController {
   async create(req, res, next) {
     try {
       const healthWorkerId = req.user ? req.user.id : (req.body.healthWorkerId || 'HW-DEMO-01');
-      if (!req.body.idempotencyKey && req.headers['idempotency-key']) {
-        req.body.idempotencyKey = req.headers['idempotency-key'];
+      if (!req.body.idempotencyKey) {
+        if (req.headers['idempotency-key']) {
+          req.body.idempotencyKey = req.headers['idempotency-key'];
+        } else if (req.headers['x-idempotency-key']) {
+          req.body.idempotencyKey = req.headers['x-idempotency-key'];
+        } else if (req.body.id) {
+          req.body.idempotencyKey = `IDEMP-${req.body.id}`;
+        } else if (req.body.consultationId) {
+          req.body.idempotencyKey = `IDEMP-${req.body.consultationId}`;
+        }
       }
       const result = await consultationService.createConsultation(req.body, healthWorkerId);
 
@@ -49,6 +57,32 @@ class ConsultationsController {
     }
   }
 
+  async list(req, res, next) {
+    try {
+      const { status, priority, clinicId, patientId, limit, offset } = req.query;
+      const list = await consultationService.getConsultationsList({
+        status,
+        priority,
+        clinicId,
+        patientId,
+        limit,
+        offset,
+      });
+
+      if (req.query.envelope === 'true') {
+        return res.status(200).json({
+          success: true,
+          count: list.length,
+          data: list,
+        });
+      }
+
+      res.status(200).json(list);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getDoctorQueue(req, res, next) {
     try {
       const { status, priority, clinicId, limit, offset } = req.query;
@@ -72,9 +106,9 @@ class ConsultationsController {
   async updateReview(req, res, next) {
     try {
       const { id } = req.params;
-      const { status = 'in_review' } = req.body;
-      const doctorId = req.user ? req.user.id : req.body.doctorId;
-      const doctorName = req.user ? req.user.name : req.body.doctorName;
+      const status = req.body.status || req.body.reviewStatus || 'in_review';
+      const doctorId = req.user ? req.user.id : (req.body.doctorId || 'DOC-DEMO-01');
+      const doctorName = req.user ? req.user.name : (req.body.doctorName || 'Dr. Remote Specialist');
 
       const updated = await consultationService.updateReviewStatus(id, {
         status,

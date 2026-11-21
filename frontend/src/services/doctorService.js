@@ -9,7 +9,7 @@ export const doctorService = {
   async getDoctorConsultations(params = {}) {
     try {
       const response = await api.get('/doctor/consultations', { params });
-      return response.data;
+      return Array.isArray(response.data) ? response.data : (response.data?.data || []);
     } catch (err) {
       // Return consultations that have arrived (status not draft)
       const list = mockConsultations.filter((c) => c.status !== 'draft');
@@ -26,7 +26,7 @@ export const doctorService = {
   async getDoctorConsultation(id) {
     try {
       const response = await api.get(`/doctor/consultations/${id}`);
-      return response.data;
+      return response.data?.data || response.data;
     } catch (err) {
       const local = await dbGetConsultation(id);
       if (local) return local;
@@ -41,7 +41,7 @@ export const doctorService = {
   async updateReviewStatus(id, reviewStatus) {
     try {
       const response = await api.patch(`/doctor/consultations/${id}/review`, { reviewStatus });
-      return { success: true, data: response.data };
+      return { success: true, data: response.data?.data || response.data };
     } catch (err) {
       const existing = await this.getDoctorConsultation(id);
       if (existing) {

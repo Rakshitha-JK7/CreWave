@@ -9,9 +9,10 @@ export const patientService = {
   async createPatient(patientData) {
     try {
       const response = await api.post('/patients', patientData);
+      const patient = response.data?.data || response.data;
       // Cache in IndexedDB for offline view
-      await dbSavePatient(response.data);
-      return { success: true, data: response.data };
+      await dbSavePatient(patient);
+      return { success: true, data: patient };
     } catch (err) {
       console.warn('API unavailable, saving patient locally:', err.userMessage || err.message);
       // Offline fallback: save to IndexedDB & localStorage
@@ -43,14 +44,14 @@ export const patientService = {
   async getPatients(params = {}) {
     try {
       const response = await api.get('/patients', { params });
-      return response.data;
+      return Array.isArray(response.data) ? response.data : (response.data?.data || []);
     } catch (err) {
       // Offline fallback: Merge mock patients with any locally created ones
       const localPatients = await dbGetPatients();
       const stored = JSON.parse(localStorage.getItem('carewave_patients') || '[]');
-      
+
       const combined = [...mockPatients];
-      
+
       // Add local unique items
       [...(localPatients || []), ...stored].forEach((p) => {
         if (!combined.some((item) => item.id === p.id)) {
@@ -68,7 +69,7 @@ export const patientService = {
   async getPatient(id) {
     try {
       const response = await api.get(`/patients/${id}`);
-      return response.data;
+      return response.data?.data || response.data;
     } catch (err) {
       const local = await dbGetPatient(id);
       if (local) return local;
@@ -87,8 +88,9 @@ export const patientService = {
   async updatePatient(id, updates) {
     try {
       const response = await api.patch(`/patients/${id}`, updates);
-      await dbSavePatient(response.data);
-      return { success: true, data: response.data };
+      const data = response.data?.data || response.data;
+      await dbSavePatient(data);
+      return { success: true, data };
     } catch (err) {
       // Local fallback
       const patient = await this.getPatient(id);

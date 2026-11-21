@@ -7,6 +7,9 @@ const { optionalAuth } = require('../middleware/auth');
 // Create consultation (handles idempotency key for offline-first retries)
 router.post('/', optionalAuth, consultationsController.create);
 
+// List all consultations for health worker / clinic / patient
+router.get('/', optionalAuth, consultationsController.list);
+
 // Get consultation details
 router.get('/:id', optionalAuth, consultationsController.getById);
 
