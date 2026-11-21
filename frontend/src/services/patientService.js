@@ -1,6 +1,11 @@
 import api from './api';
-import { mockPatients } from '../data/mockData';
-import { savePatient as dbSavePatient, getAllPatients as dbGetPatients, getPatient as dbGetPatient } from '../offline/indexedDB';
+import {
+  savePatient as dbSavePatient,
+  getAllPatients as dbGetPatients,
+  getPatient as dbGetPatient,
+  deletePatient as dbDeletePatient,
+  clearPatients as dbClearPatients,
+} from '../offline/indexedDB';
 
 export const patientService = {
   /**
@@ -15,7 +20,6 @@ export const patientService = {
       return { success: true, data: patient };
     } catch (err) {
       console.warn('API unavailable, saving patient locally:', err.userMessage || err.message);
-      // Offline fallback: save to IndexedDB & localStorage
       const newPatient = {
         ...patientData,
         id: patientData.id || `PAT-${Date.now().toString().slice(-4)}`,
@@ -24,11 +28,6 @@ export const patientService = {
       };
 
       await dbSavePatient(newPatient);
-
-      const localList = JSON.parse(localStorage.getItem('carewave_patients') || '[]');
-      localList.push(newPatient);
-      localStorage.setItem('carewave_patients', JSON.stringify(localList));
-
       return {
         success: true,
         data: newPatient,
@@ -39,32 +38,45 @@ export const patientService = {
   },
 
   /**
-   * Retrieve all patients
+   * Retrieve all patients directly from the database API
    */
   async getPatients(params = {}) {
     try {
       const response = await api.get('/patients', { params });
-      return Array.isArray(response.data) ? response.data : (response.data?.data || []);
-    } catch (err) {
-      // Offline fallback: Merge mock patients with any locally created ones
-      const localPatients = await dbGetPatients();
-      const stored = JSON.parse(localStorage.getItem('carewave_patients') || '[]');
+      const serverList = Array.isArray(response.data) ? response.data : (response.data?.data || []);
 
-      const combined = [...mockPatients];
-
-      // Add local unique items
-      [...(localPatients || []), ...stored].forEach((p) => {
-        if (!combined.some((item) => item.id === p.id)) {
-          combined.unshift(p);
+      // Keep local cache synchronized with database: delete stale cached records if removed from database
+      try {
+        const local = await dbGetPatients();
+        const serverIds = new Set(serverList.map((p) => p.id));
+        if (serverList.length === 0) {
+          // Database was cleared or is empty: clear all cached patients!
+          await dbClearPatients();
+        } else {
+          for (const lp of (local || [])) {
+            if (!serverIds.has(lp.id)) {
+              await dbDeletePatient(lp.id);
+            }
+          }
         }
-      });
+      } catch (e) {
+        // ignore
+      }
 
-      return combined;
+      return serverList;
+    } catch (err) {
+      console.warn('API patient list error:', err.message);
+      // Offline fallback: only return locally cached patients when browser is truly offline
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        const localPatients = await dbGetPatients().catch(() => []);
+        return localPatients || [];
+      }
+      return [];
     }
   },
 
   /**
-   * Retrieve single patient by ID
+   * Retrieve single patient by ID from database API
    */
   async getPatient(id) {
     try {
@@ -72,13 +84,7 @@ export const patientService = {
       return response.data?.data || response.data;
     } catch (err) {
       const local = await dbGetPatient(id);
-      if (local) return local;
-
-      const mock = mockPatients.find((p) => p.id === id);
-      if (mock) return mock;
-
-      const stored = JSON.parse(localStorage.getItem('carewave_patients') || '[]');
-      return stored.find((p) => p.id === id) || null;
+      return local || null;
     }
   },
 
@@ -92,7 +98,6 @@ export const patientService = {
       await dbSavePatient(data);
       return { success: true, data };
     } catch (err) {
-      // Local fallback
       const patient = await this.getPatient(id);
       if (patient) {
         const updated = { ...patient, ...updates, updatedAt: new Date().toISOString() };

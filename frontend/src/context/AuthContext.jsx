@@ -59,12 +59,19 @@ export function AuthProvider({ children }) {
         }
       } catch (err) {
         console.warn('Session verification failed or server offline:', err.message);
-        // If offline, preserve stored credentials so rural workers can continue offline
-        const storedUser = localStorage.getItem('carewave_user');
-        if (storedUser) {
-          try {
-            setCurrentUser(JSON.parse(storedUser));
-          } catch {
+        if (err.response?.status === 401 || err.response?.status === 403) {
+          // Authoritative database rejection: credentials or token no longer exist
+          logout();
+        } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          // Truly offline: preserve stored credentials so rural workers can continue offline
+          const storedUser = localStorage.getItem('carewave_user');
+          if (storedUser) {
+            try {
+              setCurrentUser(JSON.parse(storedUser));
+            } catch {
+              logout();
+            }
+          } else {
             logout();
           }
         } else {

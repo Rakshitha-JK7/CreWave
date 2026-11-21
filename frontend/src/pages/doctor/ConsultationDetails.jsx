@@ -31,6 +31,8 @@ import doctorService from '../../services/doctorService';
 import patientService from '../../services/patientService';
 import VitalCard from '../../components/VitalCard';
 import StatusBadge from '../../components/StatusBadge';
+import EmptyState from '../../components/EmptyState';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { formatDate, formatDateTime, formatRelative } from '../../utils/formatDate';
 
 function safeString(val, fallback = '—') {
@@ -49,74 +51,35 @@ export default function ConsultationDetails() {
   const navigate = useNavigate();
   const { addNotification } = useApp() || {};
 
-  const [dbConsultation, setDbConsultation] = useState(null);
-  const [dbPatient, setDbPatient] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [consultation, setConsultation] = useState(null);
+  const [patient, setPatient] = useState(null);
 
   useEffect(() => {
     let mounted = true;
     async function fetchRecord() {
+      setLoading(true);
       try {
         const c = await doctorService.getDoctorConsultation(id);
         if (mounted && c) {
-          setDbConsultation(c);
+          setConsultation(c);
           if (c.patientId) {
             const p = await patientService.getPatient(c.patientId).catch(() => null);
-            if (mounted && p) setDbPatient(p);
+            if (mounted && p) setPatient(p);
+            else if (mounted && c.patient) setPatient(c.patient);
+          } else if (c.patient) {
+            setPatient(c.patient);
           }
         }
       } catch (err) {
         console.warn('Could not load consultation from API:', err);
+      } finally {
+        if (mounted) setLoading(false);
       }
     }
     fetchRecord();
     return () => { mounted = false; };
   }, [id]);
-
-  // Find consultation from loaded API record or localStorage
-  const consultation = useMemo(() => {
-    if (dbConsultation) return dbConsultation;
-    try {
-      const stored = localStorage.getItem('carewave_consultations');
-      if (stored) {
-        const list = JSON.parse(stored);
-        const match = list.find((c) => c.id === id);
-        if (match) return match;
-      }
-    } catch (e) {
-      // ignore
-    }
-    return {
-      id,
-      patientId: 'PAT-LOCAL',
-      patientName: 'Patient Record',
-      status: 'pending',
-      urgency: 'routine',
-      vitals: {},
-      symptoms: {},
-      attachments: [],
-    };
-  }, [id, dbConsultation]);
-
-  // Patient details
-  const patient = useMemo(() => {
-    if (dbPatient) return dbPatient;
-    return {
-      id: consultation.patientId || 'PAT001',
-      name: consultation.patientName || 'Patient',
-      age: consultation.patientAge || 45,
-      sex: consultation.patientSex || 'Male',
-      village: consultation.patientVillage || 'Rural Center',
-      bloodGroup: consultation.bloodGroup || 'B+',
-      emergencyContact: {
-        name: 'Family Contact',
-        phone: '+91-9876543211',
-        relation: 'Relative',
-      },
-      conditions: [],
-      allergies: [],
-      medications: [],
-    };
-  }, [consultation, dbPatient]);
 
   // Modals state
   const [previewImage, setPreviewImage] = useState(null);
@@ -125,7 +88,46 @@ export default function ConsultationDetails() {
   const [isSendingRequest, setIsSendingRequest] = useState(false);
   const [requestSentSuccess, setRequestSentSuccess] = useState(false);
 
-  // Vitals helper
+  if (loading) {
+    return (
+      <DashboardLayout role="doctor">
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+          <LoadingSpinner size="lg" text="Loading consultation record from database..." />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!consultation) {
+    return (
+      <DashboardLayout role="doctor">
+        <div style={{ maxWidth: 600, margin: '60px auto', textAlign: 'center' }}>
+          <EmptyState
+            icon={FileText}
+            title="Consultation Not Found"
+            description={`Consultation #${id} was not found in the database. It may have been removed or has not been uploaded yet.`}
+          />
+          <button
+            onClick={() => navigate('/doctor')}
+            style={{
+              marginTop: 16,
+              padding: '10px 20px',
+              backgroundColor: '#0284c7',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 8,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Back to Consultations
+          </button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const patientObj = patientInfo || patient || consultation.patient || {};
   const vitals = consultation.vitals || {};
   const progress =
     consultation.transferProgress ||
@@ -277,7 +279,7 @@ export default function ConsultationDetails() {
                     borderRadius: 4,
                   }}
                 >
-                  {patient.id}
+                  {patientObj.id || consultation.patientId || '—'}
                 </span>
               </div>
 
@@ -292,41 +294,41 @@ export default function ConsultationDetails() {
               >
                 <div>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>FULL NAME</div>
-                  <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>{patient.name}</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>{patientObj.name || consultation.patientName || 'Patient'}</div>
                 </div>
 
                 <div>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>AGE / SEX</div>
                   <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1e293b' }}>
-                    {patient.age} years / {patient.sex}
+                    {patientObj.age ?? consultation.patientAge ?? '—'} years / {patientObj.sex || consultation.patientSex || '—'}
                   </div>
                 </div>
 
                 <div>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>BLOOD GROUP</div>
                   <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#dc2626' }}>
-                    {patient.bloodGroup || '—'}
+                    {patientObj.bloodGroup || consultation.bloodGroup || '—'}
                   </div>
                 </div>
 
                 <div>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>VILLAGE / DISTRICT</div>
                   <div style={{ fontSize: '0.95rem', fontWeight: 500, color: '#1e293b' }}>
-                    {patient.village}, {patient.district || 'Sitapur'}
+                    {patientObj.village || consultation.patientVillage || 'Rural Center'}, {patientObj.district || 'Sitapur'}
                   </div>
                 </div>
 
                 <div>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>EMERGENCY CONTACT</div>
                   <div style={{ fontSize: '0.9rem', fontWeight: 500, color: '#1e293b' }}>
-                    {typeof patient.emergencyContact === 'string'
-                      ? patient.emergencyContact
-                      : patient.emergencyContact?.name
-                        ? `${patient.emergencyContact.name} (${patient.emergencyContact.relation || 'Kin'})`
+                    {typeof patientObj.emergencyContact === 'string'
+                      ? patientObj.emergencyContact
+                      : patientObj.emergencyContact?.name
+                        ? `${patientObj.emergencyContact.name} (${patientObj.emergencyContact.relation || 'Kin'})`
                         : 'None documented'}
-                    {typeof patient.emergencyContact === 'object' && patient.emergencyContact?.phone && (
+                    {typeof patientObj.emergencyContact === 'object' && patientObj.emergencyContact?.phone && (
                       <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                        {patient.emergencyContact.phone}
+                        {patientObj.emergencyContact.phone}
                       </div>
                     )}
                   </div>
@@ -339,8 +341,8 @@ export default function ConsultationDetails() {
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginRight: 8 }}>
                     Pre-existing Conditions:
                   </span>
-                  {(Array.isArray(patient.conditions) ? patient.conditions : typeof patient.conditions === 'string' && patient.conditions ? patient.conditions.split(', ') : []).length > 0 ? (
-                    (Array.isArray(patient.conditions) ? patient.conditions : patient.conditions.split(', ')).map((cond, idx) => (
+                  {(Array.isArray(patientObj.conditions) ? patientObj.conditions : typeof patientObj.conditions === 'string' && patientObj.conditions ? patientObj.conditions.split(', ') : []).length > 0 ? (
+                    (Array.isArray(patientObj.conditions) ? patientObj.conditions : patientObj.conditions.split(', ')).map((cond, idx) => (
                       <span
                         key={idx}
                         style={{
@@ -367,8 +369,8 @@ export default function ConsultationDetails() {
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#dc2626', marginRight: 8 }}>
                     Known Allergies:
                   </span>
-                  {(Array.isArray(patient.allergies) ? patient.allergies : typeof patient.allergies === 'string' && patient.allergies ? patient.allergies.split(', ') : []).length > 0 ? (
-                    (Array.isArray(patient.allergies) ? patient.allergies : patient.allergies.split(', ')).map((alg, idx) => (
+                  {(Array.isArray(patientObj.allergies) ? patientObj.allergies : typeof patientObj.allergies === 'string' && patientObj.allergies ? patientObj.allergies.split(', ') : []).length > 0 ? (
+                    (Array.isArray(patientObj.allergies) ? patientObj.allergies : patientObj.allergies.split(', ')).map((alg, idx) => (
                       <span
                         key={idx}
                         style={{
@@ -395,8 +397,8 @@ export default function ConsultationDetails() {
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginRight: 8 }}>
                     Current Medications:
                   </span>
-                  {(Array.isArray(patient.medications) ? patient.medications : typeof patient.medications === 'string' && patient.medications ? patient.medications.split(', ') : []).length > 0 ? (
-                    (Array.isArray(patient.medications) ? patient.medications : patient.medications.split(', ')).map((med, idx) => (
+                  {(Array.isArray(patientObj.medications) ? patientObj.medications : typeof patientObj.medications === 'string' && patientObj.medications ? patientObj.medications.split(', ') : []).length > 0 ? (
+                    (Array.isArray(patientObj.medications) ? patientObj.medications : patientObj.medications.split(', ')).map((med, idx) => (
                       <span
                         key={idx}
                         style={{

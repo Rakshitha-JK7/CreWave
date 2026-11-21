@@ -42,6 +42,15 @@ api.interceptors.response.use(
       const status = error.response.status;
       if (status === 401) {
         friendlyMessage = 'Session expired. Please re-authenticate.';
+        // If an authenticated request is rejected with 401, remove the invalid cached token
+        try {
+          if (typeof localStorage !== 'undefined' && !error.config?.url?.includes('/auth/login')) {
+            localStorage.removeItem('carewave_auth_token');
+            localStorage.removeItem('carewave_user');
+          }
+        } catch (e) {
+          // ignore
+        }
       } else if (status === 403) {
         friendlyMessage = 'You do not have permission to perform this action.';
       } else if (status === 404) {

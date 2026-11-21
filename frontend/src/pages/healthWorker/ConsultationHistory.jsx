@@ -21,7 +21,8 @@ export default function ConsultationHistory() {
     async function loadData() {
       setLoading(true);
       try {
-        const data = await consultationService.getConsultations();
+        const params = statusFilter === 'draft' ? { status: 'draft' } : {};
+        const data = await consultationService.getConsultations(params);
         setConsultations(data || []);
       } catch (err) {
         console.error(err);
@@ -30,7 +31,7 @@ export default function ConsultationHistory() {
       }
     }
     loadData();
-  }, []);
+  }, [statusFilter]);
 
   const filtered = consultations.filter((c) => {
     const q = searchQuery.toLowerCase();
@@ -41,7 +42,10 @@ export default function ConsultationHistory() {
       c.patientId?.toLowerCase().includes(q) ||
       complaint.toLowerCase().includes(q);
 
-    const matchesStatus = statusFilter === 'all' || c.status === statusFilter || (statusFilter === 'draft' && c.isDraft);
+    const matchesStatus =
+      statusFilter === 'all'
+        ? true
+        : (statusFilter === 'draft' ? (c.isDraft || c.status === 'draft') : c.status === statusFilter);
     const matchesUrgency = urgencyFilter === 'all' || c.urgency === urgencyFilter || c.priority === urgencyFilter;
 
     return matchesSearch && matchesStatus && matchesUrgency;

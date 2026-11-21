@@ -1,27 +1,22 @@
 import api from './api';
-import { mockConsultations } from '../data/mockData';
 import { getConsultation as dbGetConsultation, saveConsultation as dbSaveConsultation } from '../offline/indexedDB';
 
 export const doctorService = {
   /**
-   * Get consultations accessible to the doctor
+   * Get consultations accessible to the doctor directly from the database API
    */
   async getDoctorConsultations(params = {}) {
     try {
       const response = await api.get('/doctor/consultations', { params });
       return Array.isArray(response.data) ? response.data : (response.data?.data || []);
     } catch (err) {
-      // Return consultations that have arrived (status not draft)
-      const list = mockConsultations.filter((c) => c.status !== 'draft');
-      if (params.urgency) {
-        return list.filter((c) => c.urgency === params.urgency);
-      }
-      return list;
+      console.warn('API doctor consultation list error:', err.message);
+      return [];
     }
   },
 
   /**
-   * Get single consultation detail for doctor assessment
+   * Get single consultation detail for doctor assessment from database API
    */
   async getDoctorConsultation(id) {
     try {
@@ -29,9 +24,7 @@ export const doctorService = {
       return response.data?.data || response.data;
     } catch (err) {
       const local = await dbGetConsultation(id);
-      if (local) return local;
-
-      return mockConsultations.find((c) => c.id === id) || null;
+      return local || null;
     }
   },
 

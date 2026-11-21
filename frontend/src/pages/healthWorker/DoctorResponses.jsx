@@ -21,18 +21,10 @@ export default function DoctorResponses() {
     async function loadResponses() {
       try {
         const res = await syncDoctorResponses();
-        const local = JSON.parse(localStorage.getItem('carewave_responses') || '[]');
-        const combined = [...local];
-        if (res.responses && Array.isArray(res.responses)) {
-          res.responses.forEach((r) => {
-            if (!combined.some((item) => item.id === r.id)) {
-              combined.push(r);
-            }
-          });
-        }
+        const serverResponses = (res && Array.isArray(res.responses)) ? res.responses : [];
 
         const commStatus = JSON.parse(localStorage.getItem('carewave_communicated_responses') || '{}');
-        const enriched = combined.map((r) => ({
+        const enriched = serverResponses.map((r) => ({
           ...r,
           communicatedToPatient: commStatus[r.id] || false,
         }));

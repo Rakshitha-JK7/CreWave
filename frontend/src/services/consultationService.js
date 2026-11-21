@@ -1,9 +1,10 @@
 import api from './api';
-import { mockConsultations } from '../data/mockData';
 import {
   saveConsultation as dbSaveConsultation,
   getConsultation as dbGetConsultation,
   getAllConsultations as dbGetAllConsultations,
+  deleteConsultation as dbDeleteConsultation,
+  clearConsultations as dbClearConsultations,
   getDraftConsultations as dbGetDraftConsultations,
 } from '../offline/indexedDB';
 import { enqueueConsultation, getTransferStatus } from '../offline/offlineQueue';
@@ -11,6 +12,7 @@ import { enqueueConsultation, getTransferStatus } from '../offline/offlineQueue'
 export const consultationService = {
   /**
    * List available approved doctors for consultation routing
+   * Strictly fetched from database active users
    */
   async getDoctors() {
     try {
@@ -18,15 +20,7 @@ export const consultationService = {
       return response.data?.data || response.data || [];
     } catch (err) {
       console.warn('Could not fetch doctor list from server:', err);
-      return [
-        {
-          id: 'DOC-DEMO-01',
-          name: 'Dr. Ramesh Sharma (Tele-Specialist)',
-          specialization: 'Cardiology & General Medicine',
-          licenseNumber: 'MED-REG-44921',
-          status: 'active',
-        },
-      ];
+      return [];
     }
   },
 
@@ -44,7 +38,7 @@ export const consultationService = {
       consultation.idempotencyKey = `IDEMP-${consultation.id}`;
     }
 
-    // 1. Always write to client storage first (No data loss principle)
+    // 1. Write to client storage for offline protection
     await dbSaveConsultation(consultation);
 
     // 2. Queue for chunked/resumable transmission
@@ -78,62 +72,69 @@ export const consultationService = {
 
   /**
    * List all consultations accessible to user role
+   * Strictly sourced from the PostgreSQL / SQLite database when online
    */
   async getConsultations(params = {}) {
-    let serverList = [];
     try {
       const response = await api.get('/consultations', { params });
-      serverList = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+      const serverList = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+
+      // Authoritative database sync: clean up stale cached records so clearing DB clears frontend
+      try {
+        const local = await dbGetAllConsultations();
+        const serverIds = new Set(serverList.map((c) => c.id));
+        if (serverList.length === 0) {
+          // Database was cleared or is empty: clear all non-draft local consultations!
+          await dbClearConsultations();
+        } else {
+          for (const item of (local || [])) {
+            if (!item.isDraft && item.status !== 'draft' && !serverIds.has(item.id)) {
+              await dbDeleteConsultation(item.id);
+            }
+          }
+        }
+      } catch (e) {
+        // ignore local pruning errors
+      }
+
+      // If user specifically filtered for drafts, retrieve active drafts from local draft stores
+      if (params.status === 'draft') {
+        const [idbDrafts, localDrafts] = await Promise.all([
+          dbGetDraftConsultations().catch(() => []),
+          Promise.resolve(JSON.parse(localStorage.getItem('carewave_drafts') || '[]')),
+        ]);
+        const combinedDrafts = [...idbDrafts];
+        localDrafts.forEach((d) => {
+          if (d && d.id && !combinedDrafts.some((item) => item.id === d.id)) {
+            combinedDrafts.push(d);
+          }
+        });
+        return combinedDrafts;
+      }
+
+      // Filter by params if provided
+      if (params.status && params.status !== 'all') {
+        return serverList.filter((c) => c.status === params.status);
+      }
+      if (params.patientId) {
+        return serverList.filter((c) => c.patientId === params.patientId || c.patientReferenceId === params.patientId);
+      }
+
+      return serverList;
     } catch (err) {
       console.warn('API consultation list error or offline:', err.message);
-    }
-
-    // Always fetch local and drafted consultations from client IndexedDB and localStorage
-    let localList = [];
-    let draftList = [];
-    try {
-      const [allCons, allDrafts] = await Promise.all([
-        dbGetAllConsultations().catch(() => []),
-        dbGetDraftConsultations().catch(() => []),
-      ]);
-      localList = allCons || [];
-      draftList = allDrafts || [];
-    } catch (e) {
-      console.warn('Could not read local consultations from IndexedDB:', e);
-    }
-
-    let localDrafts = [];
-    try {
-      localDrafts = JSON.parse(localStorage.getItem('carewave_drafts') || '[]');
-    } catch {
-      localDrafts = [];
-    }
-
-    // Merge server consultations, local consultations, and drafts
-    const combined = [...serverList];
-    [...(localList || []), ...(draftList || []), ...localDrafts].forEach((c) => {
-      if (!c || !c.id) return;
-      const idx = combined.findIndex((item) => item.id === c.id);
-      if (idx !== -1) {
-        combined[idx] = { ...combined[idx], ...c };
-      } else {
-        combined.unshift(c);
+      // Offline fallback: only return locally cached consultations when server is truly unreachable
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        const local = await dbGetAllConsultations().catch(() => []);
+        return local || [];
       }
-    });
-
-    // Filter by params if provided
-    if (params.status && params.status !== 'all') {
-      return combined.filter((c) => c.status === params.status);
+      return [];
     }
-    if (params.patientId) {
-      return combined.filter((c) => c.patientId === params.patientId || c.patientReferenceId === params.patientId);
-    }
-
-    return combined;
   },
 
   /**
    * Retrieve single consultation detail
+   * Directly from database API; fallback to local IDB only for offline inspection
    */
   async getConsultation(id) {
     try {
@@ -141,10 +142,7 @@ export const consultationService = {
       return response.data?.data || response.data;
     } catch (err) {
       const local = await dbGetConsultation(id);
-      if (local) return local;
-
-      const mock = mockConsultations.find((c) => c.id === id);
-      return mock || null;
+      return local || null;
     }
   },
 

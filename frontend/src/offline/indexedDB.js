@@ -132,6 +132,20 @@ export async function getAllConsultations() {
   });
 }
 
+export async function deleteConsultation(id) {
+  return performTx('consultations', 'readwrite', (store, setResult) => {
+    const req = store.delete(id);
+    req.onsuccess = () => setResult(true);
+  });
+}
+
+export async function clearConsultations() {
+  return performTx('consultations', 'readwrite', (store, setResult) => {
+    const req = store.clear();
+    req.onsuccess = () => setResult(true);
+  });
+}
+
 /* ============================================================
    DRAFT OPERATIONS
    ============================================================ */
@@ -195,6 +209,36 @@ export async function getAllPatients() {
   });
 }
 
+export async function deletePatient(id) {
+  return performTx('patients', 'readwrite', (store, setResult) => {
+    const req = store.delete(id);
+    req.onsuccess = () => setResult(true);
+  });
+}
+
+export async function clearPatients() {
+  return performTx('patients', 'readwrite', (store, setResult) => {
+    const req = store.clear();
+    req.onsuccess = () => setResult(true);
+  });
+}
+
+export async function clearAllLocalData() {
+  await Promise.all([
+    clearConsultations().catch(() => {}),
+    clearPatients().catch(() => {}),
+  ]);
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('carewave_drafts');
+      localStorage.removeItem('carewave_responses');
+      localStorage.removeItem('carewave_communicated_responses');
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
 /* ============================================================
    PENDING QUEUE OPERATIONS (Sync Engine Boundary)
    ============================================================ */
@@ -256,6 +300,8 @@ export default {
   saveConsultation,
   getConsultation,
   getAllConsultations,
+  deleteConsultation,
+  clearConsultations,
   saveDraft,
   getDraftConsultations,
   deleteDraft,
@@ -263,6 +309,9 @@ export default {
   savePatient,
   getPatient,
   getAllPatients,
+  deletePatient,
+  clearPatients,
+  clearAllLocalData,
   savePendingUpload,
   getPendingUploads,
   removePendingUpload,

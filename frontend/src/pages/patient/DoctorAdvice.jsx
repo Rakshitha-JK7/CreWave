@@ -21,19 +21,11 @@ export default function DoctorAdvice() {
     async function loadAdvice() {
       try {
         const res = await syncDoctorResponses().catch(() => ({ responses: [] }));
-        const local = JSON.parse(localStorage.getItem('carewave_responses') || '[]');
-        const combined = [...local];
-        if (res.responses && Array.isArray(res.responses)) {
-          res.responses.forEach((r) => {
-            if (!combined.some((item) => item.id === r.id)) {
-              combined.push(r);
-            }
-          });
-        }
+        const serverResponses = (res && Array.isArray(res.responses)) ? res.responses : [];
         if (mounted) {
-          setResponses(combined);
-          if (combined.length > 0 && !selectedResponse) {
-            setSelectedResponse(combined[0]);
+          setResponses(serverResponses);
+          if (serverResponses.length > 0 && !selectedResponse) {
+            setSelectedResponse(serverResponses[0]);
           }
         }
       } catch (err) {

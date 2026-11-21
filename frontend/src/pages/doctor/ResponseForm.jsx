@@ -20,48 +20,33 @@ import { useApp } from '../../context/AppContext';
 import responseService from '../../services/responseService';
 import doctorService from '../../services/doctorService';
 import StatusBadge from '../../components/StatusBadge';
+import EmptyState from '../../components/EmptyState';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 export default function ResponseForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addNotification, currentUser } = useApp();
 
-  const [dbConsultation, setDbConsultation] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [consultation, setConsultation] = useState(null);
 
   useEffect(() => {
     let mounted = true;
     async function loadRecord() {
+      setLoading(true);
       try {
         const c = await doctorService.getDoctorConsultation(id);
-        if (mounted && c) setDbConsultation(c);
+        if (mounted && c) setConsultation(c);
       } catch (err) {
         console.warn('Failed to load consultation for response form:', err);
+      } finally {
+        if (mounted) setLoading(false);
       }
     }
     loadRecord();
     return () => { mounted = false; };
   }, [id]);
-
-  // Find consultation
-  const consultation = useMemo(() => {
-    if (dbConsultation) return dbConsultation;
-    try {
-      const stored = localStorage.getItem('carewave_consultations');
-      if (stored) {
-        const list = JSON.parse(stored);
-        const match = list.find((c) => c.id === id);
-        if (match) return match;
-      }
-    } catch (e) { }
-    return {
-      id,
-      patientId: 'PAT-LOCAL',
-      patientName: 'Patient Record',
-      status: 'under_review',
-      urgency: 'routine',
-      vitals: {},
-    };
-  }, [id, dbConsultation]);
 
   const [formData, setFormData] = useState({
     assessment: '',
@@ -158,7 +143,46 @@ export default function ResponseForm() {
   };
 
   if (isSubmitted) {
+    if (loading) {
     return (
+      <DashboardLayout role="doctor">
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+          <LoadingSpinner size="lg" text="Loading consultation record from database..." />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!consultation) {
+    return (
+      <DashboardLayout role="doctor">
+        <div style={{ maxWidth: 600, margin: '60px auto', textAlign: 'center' }}>
+          <EmptyState
+            icon={FileText}
+            title="Consultation Not Found"
+            description={`Consultation #${id} was not found in the database. It may have been removed or has not been uploaded yet.`}
+          />
+          <button
+            onClick={() => navigate('/doctor')}
+            style={{
+              marginTop: 16,
+              padding: '10px 20px',
+              backgroundColor: '#0284c7',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 8,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Back to Consultations
+          </button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  return (
       <DashboardLayout role="doctor">
         <div style={{ maxWidth: 650, margin: '60px auto', background: '#fff', padding: 40, borderRadius: 16, textAlign: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
           <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
@@ -183,6 +207,45 @@ export default function ResponseForm() {
               View Reviewed Cases
             </button>
           </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (loading) {
+    return (
+      <DashboardLayout role="doctor">
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+          <LoadingSpinner size="lg" text="Loading consultation record from database..." />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!consultation) {
+    return (
+      <DashboardLayout role="doctor">
+        <div style={{ maxWidth: 600, margin: '60px auto', textAlign: 'center' }}>
+          <EmptyState
+            icon={FileText}
+            title="Consultation Not Found"
+            description={`Consultation #${id} was not found in the database. It may have been removed or has not been uploaded yet.`}
+          />
+          <button
+            onClick={() => navigate('/doctor')}
+            style={{
+              marginTop: 16,
+              padding: '10px 20px',
+              backgroundColor: '#0284c7',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 8,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Back to Consultations
+          </button>
         </div>
       </DashboardLayout>
     );

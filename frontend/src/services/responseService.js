@@ -1,8 +1,8 @@
 /**
  * Service for Doctor Response submission and management
+ * Directly sourced from the CareWave database API
  */
 import api from './api';
-import { mockResponses } from '../data/mockData';
 
 export const responseService = {
   /**
@@ -21,53 +21,19 @@ export const responseService = {
         healthWorkerInstructions: responseData.healthWorkerInstructions,
       };
 
-      let apiResponse = null;
-      try {
-        const res = await api.post(`/consultations/${consultationId}/responses`, payload);
-        apiResponse = res.data?.data || res.data;
-      } catch (networkErr) {
-        console.info('Response saved locally for sync:', networkErr.userMessage || networkErr.message);
-      }
-
-      // Check local storage / mock state
-      const newResponse = apiResponse || {
-        id: `RES-${Date.now()}`,
-        consultationId,
-        doctorId: 'DOC001',
-        doctorName: 'Dr. Anjali Mehta',
-        doctorSpecialty: 'General Medicine',
-        submittedAt: new Date().toISOString(),
-        assessment: responseData.assessment,
-        recommendations: responseData.recommendations,
-        prescriptions: responseData.prescription || responseData.prescriptions || [],
-        followUpInstructions: responseData.followUpInstructions,
-        referral: responseData.referral || { recommended: false, details: '' },
-        healthWorkerInstructions: responseData.healthWorkerInstructions,
-        status: 'completed',
-      };
-
-      // Persist to localStorage
-      const existing = JSON.parse(localStorage.getItem('carewave_responses') || '[]');
-      existing.push(newResponse);
-      localStorage.setItem('carewave_responses', JSON.stringify(existing));
-
-      // Also update consultation review status in local storage
-      const consultations = JSON.parse(localStorage.getItem('carewave_consultations') || '[]');
-      const updatedConsultations = consultations.map((c) =>
-        c.id === consultationId ? { ...c, status: 'response_available' } : c
-      );
-      localStorage.setItem('carewave_consultations', JSON.stringify(updatedConsultations));
+      const res = await api.post(`/consultations/${consultationId}/responses`, payload);
+      const apiResponse = res.data?.data || res.data;
 
       return {
         success: true,
-        data: newResponse,
+        data: apiResponse,
         message: 'Response submitted successfully. The healthcare worker will be notified.',
       };
     } catch (err) {
       console.error('Error submitting response:', err);
       return {
         success: false,
-        error: err.message || 'Submission failed. Response saved as draft.',
+        error: err.response?.data?.message || err.message || 'Submission failed.',
       };
     }
   },
@@ -104,28 +70,18 @@ export const responseService = {
   },
 
   /**
-   * Get response by consultationId
+   * Get response by consultationId directly from database API
    */
   async getResponseByConsultationId(consultationId) {
     try {
-      try {
-        const res = await api.get(`/consultations/${consultationId}/responses`);
-        const data = res.data?.data || res.data;
-        if (Array.isArray(data) && data.length > 0) {
-          return data[data.length - 1];
-        } else if (data && !Array.isArray(data)) {
-          return data;
-        }
-      } catch (e) {
-        // Fallback to local / mock
+      const res = await api.get(`/consultations/${consultationId}/responses`);
+      const data = res.data?.data || res.data;
+      if (Array.isArray(data) && data.length > 0) {
+        return data[data.length - 1];
+      } else if (data && !Array.isArray(data)) {
+        return data;
       }
-
-      const stored = JSON.parse(localStorage.getItem('carewave_responses') || '[]');
-      const local = stored.find((r) => r.consultationId === consultationId);
-      if (local) return local;
-
-      const mock = mockResponses.find((r) => r.consultationId === consultationId);
-      return mock || null;
+      return null;
     } catch (e) {
       return null;
     }
