@@ -178,12 +178,19 @@ class ResponseService {
     const params = [];
 
     if (patientId) {
-      sql += ` AND (c.patient_id = ? OR p.reference_id = ? OR p.id = ? OR p.name = ?)`;
-      params.push(patientId, patientId, patientId, patientId);
+      sql += ` AND (c.patient_id = ? OR p.reference_id = ?)`;
+      params.push(patientId, patientId);
     } else {
-      if (clinicId && clinicId !== 'CLINIC-RURAL-01' && clinicId !== 'all') {
-        sql += ` AND (c.clinic_id = ? OR c.clinic_id LIKE ?)`;
-        params.push(clinicId, `%${clinicId}%`);
+      sql += ` AND r.delivery_status != 'acknowledged'`;
+      if (clinicId && healthWorkerId) {
+        sql += ` AND (c.clinic_id = ? OR c.health_worker_id = ?)`;
+        params.push(clinicId, healthWorkerId);
+      } else if (clinicId) {
+        sql += ` AND c.clinic_id = ?`;
+        params.push(clinicId);
+      } else if (healthWorkerId) {
+        sql += ` AND c.health_worker_id = ?`;
+        params.push(healthWorkerId);
       }
     }
 

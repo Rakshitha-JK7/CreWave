@@ -36,7 +36,7 @@ class ResponsesController {
     try {
       const { clinicId, healthWorkerId, since } = req.query;
       const patientId = req.user && req.user.role === 'patient'
-        ? (req.user.name || req.user.patientId || req.user.referenceId || req.user.id)
+        ? (req.user.patientId || req.user.referenceId || req.user.id)
         : (req.query.patientId || null);
 
       const responses = await responseService.getPendingResponsesForClinic({
