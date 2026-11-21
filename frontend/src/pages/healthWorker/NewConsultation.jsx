@@ -344,7 +344,11 @@ function PreviewModal({ formData, selectedPatient, onClose, onSubmit, isSubmitti
             ) : (
               formData.attachments.map(a => (
                 <div key={a.localId} style={styles.previewAttachment}>
-                  <File size={14} />
+                  {a.preview ? (
+                    <img src={a.preview} alt="" style={{ width: 20, height: 20, objectFit: 'cover', borderRadius: 4, marginRight: 4 }} />
+                  ) : (
+                    <File size={14} />
+                  )}
                   <span>{a.name}</span>
                   <span style={{ color: '#94a3b8', fontSize: 11 }}>{formatFileSize(a.size)}</span>
                 </div>
@@ -587,14 +591,42 @@ export default function NewConsultation() {
         setAttachmentError(`"${file.name}" exceeds ${MAX_FILE_SIZE_MB}MB limit and was skipped.`)
         continue
       }
-      toAdd.push({
+      const item = {
         file,
         name: file.name,
+        fileName: file.name,
         size: file.size,
-        type: file.type,
+        fileSize: file.size,
+        type: file.type || 'application/octet-stream',
+        mimeType: file.type || 'application/octet-stream',
         localId: 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2),
         status: 'pending',
-      })
+      }
+
+      // Read file into DataURL for instant thumbnail preview and binary upload
+      if (typeof FileReader !== 'undefined') {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const result = e.target.result
+          item.dataUrl = result
+          item.data = result
+          item.content = result
+          item.preview = result
+          setFormData(prev => ({
+            ...prev,
+            attachments: prev.attachments.map(a => a.localId === item.localId ? {
+              ...a,
+              dataUrl: result,
+              data: result,
+              content: result,
+              preview: result,
+            } : a)
+          }))
+        }
+        reader.readAsDataURL(file)
+      }
+
+      toAdd.push(item)
     }
 
     if (toAdd.length) {
@@ -1374,7 +1406,13 @@ export default function NewConsultation() {
                   {formData.attachments.map(att => (
                     <div key={att.localId} style={styles.fileItem}>
                       <div style={styles.fileItemIcon}>
-                        {typeof att?.type === 'string' && att.type.startsWith('image/') ? <ImageIcon size={18} color="#2563eb" /> : <File size={18} color="#64748b" />}
+                        {att.preview ? (
+                          <img src={att.preview} alt="" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6 }} />
+                        ) : typeof att?.type === 'string' && att.type.startsWith('image/') ? (
+                          <ImageIcon size={18} color="#2563eb" />
+                        ) : (
+                          <File size={18} color="#64748b" />
+                        )}
                       </div>
                       <div style={styles.fileItemInfo}>
                         <span style={styles.fileName} title={att?.name || 'File'}>
