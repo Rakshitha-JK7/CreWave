@@ -195,32 +195,140 @@ export default function DoctorPatientRecords() {
 
                 <div style={{ marginBottom: 24 }}>
                   <h4 style={{ margin: '0 0 8px 0', fontSize: 13, color: '#64748b', textTransform: 'uppercase' }}>Consultations on Record</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {consultations
-                      .filter((c) => c.patientId === selectedPatient.id || (selectedPatient.referenceId && c.patientId === selectedPatient.referenceId))
-                      .length === 0 ? (
-                        <div style={{ color: '#94a3b8', fontSize: 13, padding: '8px 0' }}>No consultations on record for this patient.</div>
-                      ) : (
-                        consultations
-                          .filter((c) => c.patientId === selectedPatient.id || (selectedPatient.referenceId && c.patientId === selectedPatient.referenceId))
-                          .map((c) => (
-                            <div key={c.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <div>
-                                <div style={{ fontWeight: 600, fontSize: 14 }}>{c.symptoms?.chiefComplaint || 'Consultation'}</div>
-                                <div style={{ fontSize: 12, color: '#64748b' }}>Case #{c.id} • {formatDate(c.createdAt)}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {(() => {
+                      const pId = selectedPatient.id;
+                      const pRef = selectedPatient.referenceId;
+                      const pInt = selectedPatient.internalId;
+                      const pName = selectedPatient.name?.trim().toLowerCase();
+
+                      const patientCons = consultations.filter((c) => {
+                        return (
+                          (pId && (c.patientId === pId || c.patientReferenceId === pId || c.patientInternalId === pId)) ||
+                          (pRef && (c.patientId === pRef || c.patientReferenceId === pRef || c.patientInternalId === pRef)) ||
+                          (pInt && (c.patientId === pInt || c.patientReferenceId === pInt || c.patientInternalId === pInt)) ||
+                          (c.patient && (c.patient.id === pId || c.patient.referenceId === pRef || c.patient.id === pRef || c.patient.referenceId === pId)) ||
+                          (pName && c.patientName && c.patientName.trim().toLowerCase() === pName)
+                        );
+                      });
+
+                      if (patientCons.length === 0) {
+                        return (
+                          <div style={{ color: '#94a3b8', fontSize: 13, padding: '8px 0' }}>
+                            No consultations on record for this patient.
+                          </div>
+                        );
+                      }
+
+                      return patientCons.map((c) => (
+                        <div
+                          key={c.id}
+                          style={{
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: 10,
+                            padding: 14,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 10,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>
+                                {c.mainComplaint || c.symptoms?.chiefComplaint || (typeof c.symptoms === 'string' ? c.symptoms : 'Clinical Consultation')}
                               </div>
-                              <button
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => {
-                                  setSelectedPatient(null);
-                                  navigate(`/doctor/consultation/${c.id}`);
-                                }}
-                              >
-                                Open Case
-                              </button>
+                              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                                Case #{c.id} • {formatDate(c.consultationDate || c.createdAt)} • <span style={{ textTransform: 'capitalize', color: '#0284c7', fontWeight: 600 }}>{c.specialization || 'General Medicine'}</span>
+                              </div>
                             </div>
-                          ))
-                      )}
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => {
+                                setSelectedPatient(null);
+                                navigate(`/doctor/consultation/${c.id}`);
+                              }}
+                            >
+                              Open Case
+                            </button>
+                          </div>
+
+                          {/* Render Uploaded Clinical Images & Evidence */}
+                          {c.attachments && c.attachments.length > 0 && (
+                            <div style={{ marginTop: 4, paddingTop: 10, borderTop: '1px dashed #cbd5e1' }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+                                Uploaded Medical Images &amp; Evidence ({c.attachments.length})
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                                {c.attachments.map((att, idx) => {
+                                  const fileName = String(att?.name || att?.fileName || att?.file_name || 'Attachment');
+                                  const isImg = att?.type === 'image' || att?.type === 'clinical_image' || att?.type === 'ecg' ||
+                                    (typeof att?.mimeType === 'string' && att.mimeType.startsWith('image/')) ||
+                                    ['.jpg', '.jpeg', '.png', '.webp', '.svg'].some((ext) => fileName.toLowerCase().endsWith(ext));
+                                  const imgUrl = att?.originalUrl || att?.url || `/api/medical-records/attachments/${att.id}/original`;
+
+                                  return isImg ? (
+                                    <div
+                                      key={att.id || idx}
+                                      onClick={() => {
+                                        setSelectedPatient(null);
+                                        navigate(`/doctor/consultation/${c.id}`);
+                                      }}
+                                      style={{
+                                        width: 76,
+                                        height: 76,
+                                        borderRadius: 8,
+                                        overflow: 'hidden',
+                                        border: '1px solid #cbd5e1',
+                                        backgroundColor: '#0f172a',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                                      }}
+                                      title={`View ${fileName}`}
+                                    >
+                                      <img
+                                        src={imgUrl}
+                                        alt={fileName}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          if (e.target.parentElement) {
+                                            e.target.parentElement.innerHTML = '<span style="font-size:10px;color:#94a3b8;padding:4px;text-align:center;">Image</span>';
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div
+                                      key={att.id || idx}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        padding: '5px 10px',
+                                        borderRadius: 6,
+                                        backgroundColor: '#f1f5f9',
+                                        border: '1px solid #e2e8f0',
+                                        fontSize: 12,
+                                        color: '#334155',
+                                      }}
+                                    >
+                                      <span>📄</span>
+                                      <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {fileName}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ));
+                    })()}
                   </div>
                 </div>
 

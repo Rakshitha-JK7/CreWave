@@ -1,6 +1,10 @@
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../models/db');
 const patientService = require('./patientService');
+const aiRestorationService = require('./aiRestorationService');
 
 class ConsultationService {
   /**
@@ -165,29 +169,85 @@ class ConsultationService {
       throw insertErr;
     }
 
-    // If attachments metadata included in payload, register them
+    // If attachments metadata or files included in payload, register and save them
     if (Array.isArray(attachments) && attachments.length > 0) {
       for (const att of attachments) {
-        const attId = att.id || `ATT-${uuidv4().substring(0, 8).toUpperCase()}`;
+        const attId = att.id || att.attachmentId || att.localId || `ATT-${uuidv4().substring(0, 8).toUpperCase()}`;
+        const fileName = att.fileName || att.name || att.file_name || 'attachment.dat';
+        const rawMime = att.mimeType || att.type || '';
+        const isImg = att.type === 'clinical_image' || (typeof rawMime === 'string' && rawMime.startsWith('image/')) ||
+          ['.jpg', '.jpeg', '.png', '.webp', '.svg'].some(ext => fileName.toLowerCase().endsWith(ext));
+
+        let storagePath = att.storagePath || null;
+        let actualSize = Number(att.fileSize || att.size || 0);
+        let actualChecksum = att.checksum || null;
+        let uploadStatus = 'completed';
+
+        // Decode base64 or DataURL content if passed
+        const rawContent = att.dataUrl || att.content || att.base64 || att.data;
+        if (rawContent && typeof rawContent === 'string') {
+          try {
+            const b64 = rawContent.includes('base64,') ? rawContent.split('base64,')[1] : rawContent;
+            const fileBuf = Buffer.from(b64, 'base64');
+            const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const completedDir = path.resolve(__dirname, '../../uploads/completed');
+            if (!fs.existsSync(completedDir)) {
+              fs.mkdirSync(completedDir, { recursive: true });
+            }
+            storagePath = path.join(completedDir, `${attId}_${safeName}`);
+            fs.writeFileSync(storagePath, fileBuf);
+            actualSize = fileBuf.length;
+            actualChecksum = crypto.createHash('sha256').update(fileBuf).digest('hex');
+          } catch (writeErr) {
+            console.warn('[Consultation Attachment] Error writing binary attachment:', writeErr.message);
+          }
+        }
+
         await db.run(
           `INSERT INTO attachments (
             id, consultation_id, component_id, type, priority, file_name, file_size,
-            mime_type, checksum, checksum_algorithm, upload_status, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+            mime_type, checksum, checksum_algorithm, storage_path, upload_status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON CONFLICT (id) DO UPDATE SET
+            consultation_id = EXCLUDED.consultation_id,
+            storage_path = COALESCE(EXCLUDED.storage_path, attachments.storage_path),
+            upload_status = 'completed',
+            file_name = EXCLUDED.file_name,
+            file_size = EXCLUDED.file_size,
+            mime_type = EXCLUDED.mime_type,
+            checksum = COALESCE(EXCLUDED.checksum, attachments.checksum)`,
           [
             attId,
             finalConsultationId,
             att.componentId || 'supporting_attachment',
-            att.type || 'other',
-            att.priority !== undefined ? att.priority : 2,
-            att.fileName || 'attachment.dat',
-            att.fileSize || 0,
-            att.mimeType || 'application/octet-stream',
-            att.checksum || null,
-            att.checksumAlgorithm || 'sha256',
-            att.uploadStatus || 'pending',
+            isImg ? 'clinical_image' : (att.type || 'other'),
+            att.priority !== undefined ? att.priority : (isImg ? 1 : 2),
+            fileName,
+            actualSize,
+            att.mimeType || att.type || (isImg ? 'image/jpeg' : 'application/octet-stream'),
+            actualChecksum,
+            'sha256',
+            storagePath,
+            uploadStatus,
           ]
         );
+
+        // Trigger AI Restoration for clinical images
+        if (isImg && storagePath) {
+          setImmediate(async () => {
+            try {
+              await aiRestorationService.restoreImage({
+                attachmentId: attId,
+                consultationId: finalConsultationId,
+                filePath: storagePath,
+                originalHash: actualChecksum,
+                modality: att.type || 'clinical_photo',
+              });
+            } catch (e) {
+              console.warn(`[AI Restoration] Background error on ${attId}:`, e.message);
+            }
+          });
+        }
       }
     }
 
@@ -445,6 +505,33 @@ class ConsultationService {
 
     const rows = await db.all(sql, params);
 
+    const consultationIds = rows.map(r => r.id);
+    let attachmentsByConsultation = {};
+    if (consultationIds.length > 0) {
+      const placeholders = consultationIds.map(() => '?').join(',');
+      const allAtts = await db.all(
+        `SELECT id, consultation_id as "consultationId", component_id as "componentId", type, priority,
+                file_name as "fileName", file_name as "name", file_name as "file_name",
+                file_size as "fileSize", mime_type as "mimeType", checksum,
+                checksum_algorithm as "checksumAlgorithm", upload_status as "uploadStatus",
+                storage_path as "storagePath", capture_date as "captureDate", created_at as "createdAt"
+         FROM attachments
+         WHERE consultation_id IN (${placeholders})
+         ORDER BY priority ASC, created_at ASC`,
+        consultationIds
+      );
+      for (const a of (allAtts || [])) {
+        if (!attachmentsByConsultation[a.consultationId]) attachmentsByConsultation[a.consultationId] = [];
+        attachmentsByConsultation[a.consultationId].push({
+          ...a,
+          url: `/api/medical-records/attachments/${a.id}/original`,
+          originalUrl: `/api/medical-records/attachments/${a.id}/original`,
+          enhancedUrl: `/api/medical-records/attachments/${a.id}/enhanced`,
+          isCompleted: a.uploadStatus === 'completed',
+        });
+      }
+    }
+
     return rows.map(r => {
       let vitals = {};
       if (r.vitals) {
@@ -458,7 +545,10 @@ class ConsultationService {
       return {
         id: r.id,
         consultationId: r.id,
-        patientId: r.patient_id,
+        idempotencyKey: r.idempotency_key,
+        patientId: r.patientReferenceId || r.patient_id,
+        patientInternalId: r.patient_id,
+        patientReferenceId: r.patientReferenceId,
         patientName: r.patientName || r.patientReferenceId,
         healthWorkerId: r.health_worker_id,
         clinicId: r.clinic_id,
@@ -476,6 +566,16 @@ class ConsultationService {
         consultationDate: r.consultation_date,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
+        attachments: attachmentsByConsultation[r.id] || [],
+        patient: {
+          id: r.patient_id,
+          referenceId: r.patientReferenceId,
+          name: r.patientName,
+          age: r.patientAge,
+          sex: r.patientSex,
+          village: r.patientVillage,
+          contactNumber: r.patientContact,
+        },
       };
     });
   }
@@ -530,6 +630,33 @@ class ConsultationService {
 
     const rows = await db.all(sql, params);
 
+    const queueConsultationIds = rows.map(r => r.id);
+    let queueAttachmentsByConsultation = {};
+    if (queueConsultationIds.length > 0) {
+      const placeholders = queueConsultationIds.map(() => '?').join(',');
+      const queueAtts = await db.all(
+        `SELECT id, consultation_id as "consultationId", component_id as "componentId", type, priority,
+                file_name as "fileName", file_name as "name", file_name as "file_name",
+                file_size as "fileSize", mime_type as "mimeType", checksum,
+                checksum_algorithm as "checksumAlgorithm", upload_status as "uploadStatus",
+                storage_path as "storagePath", capture_date as "captureDate", created_at as "createdAt"
+         FROM attachments
+         WHERE consultation_id IN (${placeholders})
+         ORDER BY priority ASC, created_at ASC`,
+        queueConsultationIds
+      );
+      for (const a of (queueAtts || [])) {
+        if (!queueAttachmentsByConsultation[a.consultationId]) queueAttachmentsByConsultation[a.consultationId] = [];
+        queueAttachmentsByConsultation[a.consultationId].push({
+          ...a,
+          url: `/api/medical-records/attachments/${a.id}/original`,
+          originalUrl: `/api/medical-records/attachments/${a.id}/original`,
+          enhancedUrl: `/api/medical-records/attachments/${a.id}/enhanced`,
+          isCompleted: a.uploadStatus === 'completed',
+        });
+      }
+    }
+
     return rows.map(r => {
       const totalAtt = parseInt(r.totalAttachments || 0, 10);
       const compAtt = parseInt(r.completedAttachments || 0, 10);
@@ -538,7 +665,9 @@ class ConsultationService {
       return {
         id: r.id,
         idempotencyKey: r.idempotencyKey,
-        patientId: r.patientId,
+        patientId: r.patientReferenceId || r.patientId,
+        patientInternalId: r.patientId,
+        patientReferenceId: r.patientReferenceId,
         patientName: r.patientName || r.patientReferenceId || 'Rural Patient',
         patientAge: r.patientAge,
         patientSex: r.patientSex,
@@ -559,6 +688,7 @@ class ConsultationService {
         specialization: r.specialization || 'General Medicine',
         doctorId: r.doctorId || null,
         doctorName: r.doctorName || null,
+        attachments: queueAttachmentsByConsultation[r.id] || [],
         patient: {
           id: r.patientId,
           referenceId: r.patientReferenceId,

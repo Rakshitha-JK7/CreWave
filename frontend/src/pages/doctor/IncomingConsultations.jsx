@@ -381,6 +381,27 @@ export default function IncomingConsultations() {
                         <td style={{ padding: '14px 18px' }}>
                           <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.patientName || item.patient?.name || 'Patient'}</div>
                           <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {item.patientId || item.patient?.id || item.patientReferenceId || '—'}</div>
+                          {item.attachments && item.attachments.length > 0 && (
+                            <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+                              {item.attachments.slice(0, 3).map((att, idx) => {
+                                const fileName = String(att?.name || att?.fileName || att?.file_name || '');
+                                const isImg = att?.type === 'image' || att?.type === 'clinical_image' || att?.type === 'ecg' ||
+                                  (typeof att?.mimeType === 'string' && att.mimeType.startsWith('image/')) ||
+                                  ['.jpg', '.jpeg', '.png', '.webp', '.svg'].some((ext) => fileName.toLowerCase().endsWith(ext));
+                                const imgUrl = att?.originalUrl || att?.url || `/api/medical-records/attachments/${att.id}/original`;
+                                return isImg ? (
+                                  <div key={att.id || idx} style={{ width: 28, height: 28, borderRadius: 4, overflow: 'hidden', border: '1px solid #cbd5e1', backgroundColor: '#0f172a' }}>
+                                    <img src={imgUrl} alt={fileName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  </div>
+                                ) : (
+                                  <span key={att.id || idx} style={{ fontSize: 10, background: '#f1f5f9', padding: '1px 4px', borderRadius: 3, color: '#64748b' }}>📎</span>
+                                );
+                              })}
+                              {item.attachments.length > 3 && (
+                                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>+{item.attachments.length - 3}</span>
+                              )}
+                            </div>
+                          )}
                         </td>
 
                         {/* Age / Sex */}

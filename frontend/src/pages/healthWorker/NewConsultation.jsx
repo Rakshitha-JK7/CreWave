@@ -769,6 +769,42 @@ export default function NewConsultation() {
       const selectedDoc = availableDoctors.find(d => d.id === formData.doctorId)
       const docName = selectedDoc ? selectedDoc.name : (formData.doctorName || null)
 
+      // Convert attachments (including File objects) to serializable base64 content
+      const serializableAttachments = await Promise.all(
+        (formData.attachments || []).map(async (att, idx) => {
+          let dataUrl = att.dataUrl || null;
+          if (!dataUrl && (att.file instanceof File || att.file instanceof Blob)) {
+            try {
+              dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(att.file);
+              });
+            } catch (readErr) {
+              console.warn('Could not read file as dataUrl:', readErr);
+            }
+          }
+          const attName = att.name || att.fileName || att.file?.name || `attachment_${idx + 1}.dat`;
+          const attType = att.type || att.mimeType || att.file?.type || 'application/octet-stream';
+          const attSize = att.size || att.fileSize || att.file?.size || 0;
+
+          return {
+            id: att.id || att.localId || `ATT-${consultationId}-${idx + 1}`,
+            name: attName,
+            fileName: attName,
+            file_name: attName,
+            size: attSize,
+            fileSize: attSize,
+            type: attType,
+            mimeType: attType,
+            dataUrl,
+            content: dataUrl,
+            file: att.file,
+          };
+        })
+      );
+
       const consultationRecord = {
         id: consultationId,
         consultationId,
@@ -806,7 +842,7 @@ export default function NewConsultation() {
         isDraft: false,
         status: 'available_to_doctor',
         createdAt: new Date().toISOString(),
-        attachments: formData.attachments || [],
+        attachments: serializableAttachments,
       }
 
       // Always save to IndexedDB and post to /api/consultations

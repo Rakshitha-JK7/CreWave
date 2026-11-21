@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, UserPlus, Users, FilePlus, Eye, Clock, Phone, MapPin, X } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import patientService from '../../services/patientService';
+import consultationService from '../../services/consultationService';
 import { formatDate } from '../../utils/formatDate';
 import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -10,24 +11,29 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 export default function PatientRecords() {
   const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
+  const [consultations, setConsultations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sexFilter, setSexFilter] = useState('All');
   const [selectedPatient, setSelectedPatient] = useState(null);
 
   useEffect(() => {
-    async function loadPatients() {
+    async function loadData() {
       setLoading(true);
       try {
-        const data = await patientService.getPatients();
-        setPatients(data || []);
+        const [pts, cons] = await Promise.all([
+          patientService.getPatients().catch(() => []),
+          consultationService.getConsultations().catch(() => []),
+        ]);
+        setPatients(pts || []);
+        setConsultations(cons || []);
       } catch (err) {
         console.error(err);
       } finally {
         setLoading(false);
       }
     }
-    loadPatients();
+    loadData();
   }, []);
 
   const filteredPatients = patients.filter((p) => {
@@ -243,7 +249,7 @@ export default function PatientRecords() {
                   </div>
                 </div>
 
-                <div style={{ marginBottom: 24 }}>
+                <div style={{ marginBottom: 20 }}>
                   <span style={{ color: '#64748b', display: 'block', fontSize: 12, marginBottom: 6 }}>Known Allergies</span>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {selectedPatient.allergies?.map((a) => (
@@ -252,6 +258,85 @@ export default function PatientRecords() {
                     {(!selectedPatient.allergies || selectedPatient.allergies.length === 0) && (
                       <span style={{ color: '#94a3b8', fontSize: 13 }}>No known allergies</span>
                     )}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 24 }}>
+                  <span style={{ color: '#64748b', display: 'block', fontSize: 12, marginBottom: 8, textTransform: 'uppercase', fontWeight: 600 }}>
+                    Consultations on Record
+                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 240, overflowY: 'auto' }}>
+                    {(() => {
+                      const pId = selectedPatient.id;
+                      const pRef = selectedPatient.referenceId;
+                      const pInt = selectedPatient.internalId;
+                      const pName = selectedPatient.name?.trim().toLowerCase();
+
+                      const patientCons = consultations.filter((c) => {
+                        return (
+                          (pId && (c.patientId === pId || c.patientReferenceId === pId || c.patientInternalId === pId)) ||
+                          (pRef && (c.patientId === pRef || c.patientReferenceId === pRef || c.patientInternalId === pRef)) ||
+                          (pInt && (c.patientId === pInt || c.patientReferenceId === pInt || c.patientInternalId === pInt)) ||
+                          (c.patient && (c.patient.id === pId || c.patient.referenceId === pRef || c.patient.id === pRef || c.patient.referenceId === pId)) ||
+                          (pName && c.patientName && c.patientName.trim().toLowerCase() === pName)
+                        );
+                      });
+
+                      if (patientCons.length === 0) {
+                        return <div style={{ color: '#94a3b8', fontSize: 13 }}>No consultations recorded yet for this patient.</div>;
+                      }
+
+                      return patientCons.map((c) => (
+                        <div key={c.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: 13 }}>
+                                {c.mainComplaint || c.symptoms?.chiefComplaint || (typeof c.symptoms === 'string' ? c.symptoms : 'Consultation')}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#64748b' }}>
+                                Case #{c.id} • {formatDate(c.consultationDate || c.createdAt)}
+                              </div>
+                            </div>
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: '#e0f2fe', color: '#0369a1' }}>
+                              {c.status || 'Active'}
+                            </span>
+                          </div>
+
+                          {c.attachments && c.attachments.length > 0 && (
+                            <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                              {c.attachments.map((att, idx) => {
+                                const fileName = String(att?.name || att?.fileName || att?.file_name || 'Attachment');
+                                const isImg = att?.type === 'image' || att?.type === 'clinical_image' || att?.type === 'ecg' ||
+                                  (typeof att?.mimeType === 'string' && att.mimeType.startsWith('image/')) ||
+                                  ['.jpg', '.jpeg', '.png', '.webp', '.svg'].some((ext) => fileName.toLowerCase().endsWith(ext));
+                                const imgUrl = att?.originalUrl || att?.url || `/api/medical-records/attachments/${att.id}/original`;
+
+                                return isImg ? (
+                                  <div
+                                    key={att.id || idx}
+                                    style={{
+                                      width: 48,
+                                      height: 48,
+                                      borderRadius: 6,
+                                      overflow: 'hidden',
+                                      border: '1px solid #cbd5e1',
+                                      backgroundColor: '#0f172a',
+                                    }}
+                                    title={fileName}
+                                  >
+                                    <img src={imgUrl} alt={fileName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  </div>
+                                ) : (
+                                  <span key={att.id || idx} style={{ fontSize: 11, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, color: '#475569' }}>
+                                    📄 {fileName}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ));
+                    })()}
                   </div>
                 </div>
 
