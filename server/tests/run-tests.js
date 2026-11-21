@@ -494,8 +494,9 @@ async function runTestSuite() {
     });
 
     assert(res.statusCode === 200, `Expected 200, got ${res.statusCode}`);
-    assert(res.body.count >= 1, 'Should find pending responses for clinic');
-    const target = res.body.data.find(r => r.id === testResponseId);
+    const items = Array.isArray(res.body) ? res.body : res.body.data;
+    assert((res.body.count || items.length) >= 1, 'Should find pending responses for clinic');
+    const target = items.find(r => r.id === testResponseId);
     assert(target !== undefined, 'Target response must be in sync queue');
     assert(target.patient.name === 'Sunita Bai', 'Patient name should be attached');
   });

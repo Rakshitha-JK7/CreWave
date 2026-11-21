@@ -41,11 +41,16 @@ class ResponsesController {
         since,
       });
 
-      res.status(200).json({
-        success: true,
-        count: responses.length,
-        data: responses,
-      });
+      // Returns array directly to support Individual 3's responseSync: if (Array.isArray(responses))
+      if (req.query.envelope === 'true') {
+        return res.status(200).json({
+          success: true,
+          count: responses.length,
+          data: responses,
+        });
+      }
+
+      res.status(200).json(responses);
     } catch (err) {
       next(err);
     }

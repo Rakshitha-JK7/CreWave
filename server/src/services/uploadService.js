@@ -18,25 +18,32 @@ class UploadService {
     });
   }
 
+  async getSession(uploadIdOrComponentId) {
+    let session = await db.get('SELECT * FROM upload_sessions WHERE id = ?', [uploadIdOrComponentId]);
+    if (!session) {
+      session = await db.get('SELECT * FROM upload_sessions WHERE attachment_id = ? ORDER BY created_at DESC', [uploadIdOrComponentId]);
+    }
+    return session;
+  }
+
   /**
    * Initialize a new chunked upload session
    */
   async initUpload(payload) {
     this.ensureDirectories();
 
-    const {
-      consultationId,
-      attachmentId,
-      fileName,
-      fileSize,
-      chunkSize = config.defaultChunkSize,
-      totalChunks,
-      checksum,
-      checksumAlgorithm = 'sha256',
-      mimeType = 'application/octet-stream',
-      priority = 2,
-      componentType = 'clinical_recording',
-    } = payload;
+    const consultationId = payload.consultationId;
+    const attachmentId = payload.attachmentId || payload.componentId;
+    const componentId = attachmentId;
+    const fileName = payload.fileName || payload.name || `${componentId || 'attachment'}.dat`;
+    const fileSize = payload.fileSize || payload.size;
+    const chunkSize = payload.chunkSize || config.defaultChunkSize;
+    const checksum = payload.checksum || payload.fileHash || payload.hash;
+    const checksumAlgorithm = payload.checksumAlgorithm || 'sha256';
+    const mimeType = payload.mimeType || 'application/octet-stream';
+    const priority = payload.priority || 2;
+    const componentType = payload.componentType || payload.type || 'clinical_recording';
+    const totalChunks = payload.totalChunks;
 
     if (!consultationId) {
       const err = new Error('consultationId is required to initialize an upload.');
@@ -44,8 +51,8 @@ class UploadService {
       throw err;
     }
 
-    if (!fileName || !fileSize) {
-      const err = new Error('fileName and fileSize are required.');
+    if (!fileSize) {
+      const err = new Error('fileSize or size is required.');
       err.statusCode = 400;
       throw err;
     }
@@ -135,14 +142,15 @@ class UploadService {
   /**
    * Save an uploaded chunk (Idempotent: safely handles duplicate chunks)
    */
-  async saveChunk(uploadId, chunkIndex, chunkBuffer, clientChecksum = null) {
-    const session = await db.get('SELECT * FROM upload_sessions WHERE id = ?', [uploadId]);
+  async saveChunk(uploadIdOrComponentId, chunkIndex, chunkBuffer, clientChecksum = null) {
+    const session = await this.getSession(uploadIdOrComponentId);
     if (!session) {
-      const err = new Error(`Upload session not found: ${uploadId}`);
+      const err = new Error(`Upload session not found: ${uploadIdOrComponentId}`);
       err.statusCode = 404;
       err.code = 'UPLOAD_SESSION_NOT_FOUND';
       throw err;
     }
+    const uploadId = session.id;
 
     if (session.status === 'completed') {
       return {
@@ -238,14 +246,15 @@ class UploadService {
   /**
    * Get upload status, received chunks, and missing chunks for resume
    */
-  async getUploadStatus(uploadId) {
-    const session = await db.get('SELECT * FROM upload_sessions WHERE id = ?', [uploadId]);
+  async getUploadStatus(uploadIdOrComponentId) {
+    const session = await this.getSession(uploadIdOrComponentId);
     if (!session) {
-      const err = new Error(`Upload session not found: ${uploadId}`);
+      const err = new Error(`Upload session not found: ${uploadIdOrComponentId}`);
       err.statusCode = 404;
       err.code = 'UPLOAD_SESSION_NOT_FOUND';
       throw err;
     }
+    const uploadId = session.id;
 
     const receivedChunksRows = await db.all(
       'SELECT chunk_index, chunk_size, checksum, received_at FROM upload_chunks WHERE upload_id = ? ORDER BY chunk_index ASC',
@@ -289,16 +298,17 @@ class UploadService {
   /**
    * Complete chunked upload: verify all chunks, reassemble file, check final checksum
    */
-  async completeUpload(uploadId, { finalChecksum, checksumAlgorithm } = {}) {
+  async completeUpload(uploadIdOrComponentId, { finalChecksum, checksumAlgorithm } = {}) {
     this.ensureDirectories();
 
-    const session = await db.get('SELECT * FROM upload_sessions WHERE id = ?', [uploadId]);
+    const session = await this.getSession(uploadIdOrComponentId);
     if (!session) {
-      const err = new Error(`Upload session not found: ${uploadId}`);
+      const err = new Error(`Upload session not found: ${uploadIdOrComponentId}`);
       err.statusCode = 404;
       err.code = 'UPLOAD_SESSION_NOT_FOUND';
       throw err;
     }
+    const uploadId = session.id;
 
     if (session.status === 'completed') {
       const attachment = await db.get('SELECT * FROM attachments WHERE id = ?', [session.attachment_id]);

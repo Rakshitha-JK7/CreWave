@@ -4,6 +4,9 @@ class ConsultationsController {
   async create(req, res, next) {
     try {
       const healthWorkerId = req.user ? req.user.id : (req.body.healthWorkerId || 'HW-DEMO-01');
+      if (!req.body.idempotencyKey && req.headers['idempotency-key']) {
+        req.body.idempotencyKey = req.headers['idempotency-key'];
+      }
       const result = await consultationService.createConsultation(req.body, healthWorkerId);
 
       // If duplicate idempotency key, return 200 OK with duplicate notice

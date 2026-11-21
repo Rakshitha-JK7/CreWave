@@ -7,6 +7,10 @@ class UploadsController {
       res.status(201).json({
         success: true,
         message: 'Upload session initialized.',
+        uploadId: session.uploadId,
+        receivedChunks: [],
+        totalChunks: session.totalChunks,
+        chunkSize: session.chunkSize,
         data: session,
       });
     } catch (err) {
@@ -41,7 +45,13 @@ class UploadsController {
         });
       }
 
-      const clientChecksum = req.headers['x-checksum'] || req.headers['chunk-checksum'] || req.query.checksum || null;
+      const clientChecksum =
+        req.headers['x-chunk-hash'] ||
+        req.headers['x-checksum'] ||
+        req.headers['chunk-checksum'] ||
+        (req.body && (req.body.hash || req.body.chunkHash)) ||
+        req.query.checksum ||
+        null;
 
       const result = await uploadService.saveChunk(uploadId, index, chunkBuffer, clientChecksum);
 
@@ -71,7 +81,9 @@ class UploadsController {
   async complete(req, res, next) {
     try {
       const { uploadId } = req.params;
-      const { finalChecksum, checksumAlgorithm } = req.body || {};
+      const body = req.body || {};
+      const finalChecksum = body.finalChecksum || body.fileHash || body.checksum || body.hash;
+      const checksumAlgorithm = body.checksumAlgorithm;
       const result = await uploadService.completeUpload(uploadId, { finalChecksum, checksumAlgorithm });
 
       res.status(200).json({
