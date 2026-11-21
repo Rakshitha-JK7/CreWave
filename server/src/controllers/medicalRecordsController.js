@@ -10,8 +10,82 @@ const db = require('../models/db');
 const aiRestorationService = require('../services/aiRestorationService');
 
 class MedicalRecordsController {
+  ping(req, res) {
+    res.status(200).json({
+      success: true,
+      timestamp: Date.now(),
+      serverTime: new Date().toISOString(),
+      service: 'CareBridge Telemetry Receiver',
+    });
+  }
+
+  async testImageRestore(req, res, next) {
+    try {
+      const { imageBase64, filename = 'test_image.png', modality = 'clinical_photo' } = req.body;
+      if (!imageBase64) {
+        return res.status(400).json({ success: false, error: 'imageBase64 required' });
+      }
+
+      const tmpDir = path.resolve(__dirname, '../../../uploads/test_tmp');
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+
+      const fileBuffer = Buffer.from(imageBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+      const attachmentId = `TEST-ATT-${Date.now()}`;
+      const safeFilename = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = path.join(tmpDir, `${attachmentId}_${safeFilename}`);
+      fs.writeFileSync(filePath, fileBuffer);
+
+      const { calculateSha256 } = require('../telemetry/protoCodec');
+      const origHash = calculateSha256(fileBuffer);
+
+      // Register temporary attachment record so existing streaming endpoints work
+      await db.run(
+        `INSERT INTO attachments 
+         (id, consultation_id, type, priority, file_name, file_size, mime_type, checksum, storage_path, upload_status, created_at)
+         VALUES (?, 'SYNTH-TEST-CONSULTATION', ?, 1, ?, ?, 'image/png', ?, ?, 'completed', CURRENT_TIMESTAMP)
+         ON CONFLICT (id) DO UPDATE SET storage_path = EXCLUDED.storage_path, checksum = EXCLUDED.checksum`,
+        [attachmentId, modality, safeFilename, fileBuffer.length, origHash, filePath]
+      );
+
+      const result = await aiRestorationService.restoreImage({
+        attachmentId,
+        consultationId: 'SYNTH-TEST-CONSULTATION',
+        filePath,
+        originalHash: origHash,
+        modality,
+      });
+
+      // Verify original file was not modified
+      const currentOrigHash = calculateSha256(fs.readFileSync(filePath));
+      const originalUntouched = (currentOrigHash === origHash);
+
+      res.status(200).json({
+        success: true,
+        attachmentId,
+        modality,
+        originalHash: origHash,
+        enhancedHash: result?.enhancedHash || null,
+        originalUntouched,
+        modelName: result?.modelName || 'NativeFilter',
+        status: result?.status || 'completed',
+        processingTimeMs: result?.processingTimeMs || 10,
+        originalUrl: `/api/medical-records/attachments/${attachmentId}/original`,
+        enhancedUrl: result?.enhancedPath ? `/api/medical-records/attachments/${attachmentId}/enhanced` : null,
+      });
+    } catch (err) {
+      console.error('[testImageRestore Error]:', err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
   async upload(req, res, next) {
     try {
+      // Support simulated cellular connection drop for physical network validation
+      if (req.headers['x-simulate-abort'] === 'true') {
+        req.destroy(new Error('Simulated 2G GSM cellular radio connection drop'));
+        return;
+      }
+
       const buffer = req.body;
       if (!Buffer.isBuffer(buffer)) {
         return res.status(400).json({

@@ -19,6 +19,7 @@ import {
   CheckCircle,
   LogOut,
   ShieldCheck,
+  Activity,
 } from 'lucide-react';
 
 const healthWorkerNav = [
@@ -30,6 +31,7 @@ const healthWorkerNav = [
   { icon: Clock,           label: 'Pending Uploads',      path: '/health-worker/pending-uploads' },
   { icon: MessageSquare,   label: 'Doctor Responses',     path: '/health-worker/responses' },
   { icon: Wifi,            label: 'Network Monitor',      path: '/health-worker/network' },
+  { icon: Activity,        label: 'System Validation',    path: '/system-test' },
 ];
 
 const patientNav = [
@@ -47,10 +49,12 @@ const doctorNav = [
   { icon: CheckCircle,     label: 'Reviewed Cases',         path: '/doctor/reviewed' },
   { icon: Users,           label: 'Patient Records',        path: '/doctor/patients' },
   { icon: Bell,            label: 'Notifications',          path: '/doctor/notifications' },
+  { icon: Activity,        label: 'System Validation',      path: '/system-test' },
 ];
 
 const adminNav = [
   { icon: ShieldCheck,     label: 'Admin Overview',         path: '/admin' },
+  { icon: Activity,        label: 'System Validation',      path: '/system-test' },
 ];
 
 const navByRole = {

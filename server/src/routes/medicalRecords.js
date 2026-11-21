@@ -9,6 +9,12 @@ const rawBinaryParser = express.raw({
   limit: '50mb',
 });
 
+// Ping endpoint for high-precision latency measurement
+router.get('/ping', medicalRecordsController.ping);
+
+// Receiver-side AI image restoration test endpoint
+router.post('/test-image-restore', express.json({ limit: '25mb' }), medicalRecordsController.testImageRestore);
+
 // Upload unified compressed medical record
 router.post('/upload', optionalAuth, rawBinaryParser, medicalRecordsController.upload);
 

@@ -187,23 +187,27 @@ export class TransmissionManager {
   /**
    * Executes transmission of prepared compressed payload in a single HTTPS request
    */
-  async executeUpload(recordId) {
+  async executeUpload(recordId, options = {}) {
     if (this.activeTransfers.has(recordId)) {
-      return; // Prevent duplicate concurrent upload of the same record
+      return { success: false, reason: 'Upload already active for this record' };
     }
 
     const payloadMeta = await idbGet('payloads', recordId);
-    if (!payloadMeta) return;
+    if (!payloadMeta) return { success: false, reason: 'Payload not found in local IndexedDB' };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (typeof navigator !== 'undefined' && !navigator.onLine && !options.bypassOfflineCheck) {
       await this.markInterrupted(recordId, 'Offline: Waiting for mobile connection');
-      return;
+      return { success: false, reason: 'Offline' };
     }
 
     const controller = new AbortController();
     this.activeTransfers.set(recordId, controller);
 
-    const timeoutMs = adaptiveBandwidthManager.getRequestTimeoutMs(payloadMeta.compressedSize);
+    if (options.abortAfterMs) {
+      setTimeout(() => controller.abort(), options.abortAfterMs);
+    }
+
+    const timeoutMs = options.timeoutMs || adaptiveBandwidthManager.getRequestTimeoutMs(payloadMeta.compressedSize);
     const timeoutId = setTimeout(() => {
       controller.abort();
     }, timeoutMs);
@@ -216,22 +220,27 @@ export class TransmissionManager {
       progress: 45,
       text: 'Transmitting complete record over 2G GSM',
       timeoutMs,
+      startTime: new Date().toISOString(),
     });
 
     try {
       // Single complete HTTPS POST request (No chunking!)
+      const headers = {
+        'Content-Type': 'application/vnd.carebridge.medical-record',
+        'X-Record-ID': payloadMeta.recordId,
+        'X-Schema-Version': '1',
+        'X-Compression-Format': 'gzip',
+        'X-Transfer-ID': payloadMeta.transferId,
+        'X-Idempotency-Key': payloadMeta.idempotencyKey,
+        'X-Record-SHA256': payloadMeta.sha256,
+        'Authorization': token ? `Bearer ${token}` : undefined,
+        ...(options.headers || {}),
+        ...(options.simulateAbort ? { 'X-Simulate-Abort': 'true' } : {}),
+      };
+
       const response = await axios.post('/api/medical-records/upload', payloadMeta.compressedPayload, {
         signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/vnd.carebridge.medical-record',
-          'X-Record-ID': payloadMeta.recordId,
-          'X-Schema-Version': '1',
-          'X-Compression-Format': 'gzip',
-          'X-Transfer-ID': payloadMeta.transferId,
-          'X-Idempotency-Key': payloadMeta.idempotencyKey,
-          'X-Record-SHA256': payloadMeta.sha256,
-          'Authorization': token ? `Bearer ${token}` : undefined,
-        },
+        headers,
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
             const percent = Math.min(95, 45 + Math.round((progressEvent.loaded / progressEvent.total) * 50));
@@ -251,6 +260,9 @@ export class TransmissionManager {
 
       clearTimeout(timeoutId);
       const durationMs = performance.now() - startTime;
+      const throughputKbps = durationMs > 0
+        ? Number(((payloadMeta.compressedSize * 8) / (durationMs / 1000) / 1000).toFixed(2))
+        : 0;
 
       // 5. SERVER_RECEIVED & VERIFYING
       this.notify(recordId, { state: TransmissionState.SERVER_RECEIVED, progress: 96, text: 'Received by hospital server' });
@@ -268,6 +280,8 @@ export class TransmissionManager {
       payloadMeta.state = TransmissionState.DELIVERED;
       payloadMeta.deliveredAt = new Date().toISOString();
       payloadMeta.receipt = receipt;
+      payloadMeta.durationMs = durationMs;
+      payloadMeta.throughputKbps = throughputKbps;
       await idbPut('payloads', payloadMeta);
       await idbPut('queue', { recordId, transferId: payloadMeta.transferId, state: TransmissionState.DELIVERED, attempts: payloadMeta.attempts });
 
@@ -276,7 +290,18 @@ export class TransmissionManager {
         progress: 100,
         text: 'Successfully delivered and verified by hospital system',
         receipt,
+        durationMs,
+        throughputKbps,
       });
+
+      return {
+        success: true,
+        receipt,
+        durationMs,
+        throughputKbps,
+        transferId: payloadMeta.transferId,
+        recordId,
+      };
 
     } catch (err) {
       clearTimeout(timeoutId);
@@ -290,9 +315,18 @@ export class TransmissionManager {
       });
 
       const isCanceled = axios.isCancel(err) || err.name === 'AbortError' || err.code === 'ECONNABORTED';
-      const reason = isCanceled ? 'Upload timed out on weak 2G link' : (err.response?.data?.message || err.message);
+      const reason = isCanceled ? 'Upload timed out or aborted on 2G link' : (err.response?.data?.message || err.message);
 
       await this.markInterrupted(recordId, reason);
+
+      return {
+        success: false,
+        reason,
+        durationMs,
+        isCanceled,
+        transferId: payloadMeta.transferId,
+        recordId,
+      };
     } finally {
       this.activeTransfers.delete(recordId);
     }

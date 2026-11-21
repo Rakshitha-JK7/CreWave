@@ -37,6 +37,9 @@ const DoctorPatientRecords = lazy(() => import('./pages/doctor/PatientRecords'))
 const ResponseForm = lazy(() => import('./pages/doctor/ResponseForm'));
 const DoctorNotifications = lazy(() => import('./pages/doctor/DoctorNotifications'));
 
+// Validation & System Testing Dashboard
+const CareBridgeTestingDashboard = lazy(() => import('./pages/testing/CareBridgeTestingDashboard'));
+
 export default function App() {
   return (
     <AuthProvider>
@@ -234,6 +237,16 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['doctor']}>
                 <DoctorNotifications />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Dedicated CareBridge System Testing & Validation Route */}
+          <Route
+            path="/system-test"
+            element={
+              <ProtectedRoute allowedRoles={['admin', 'health_worker', 'doctor']}>
+                <CareBridgeTestingDashboard />
               </ProtectedRoute>
             }
           />
