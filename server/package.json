@@ -9,6 +9,7 @@
     "seed": "node src/scripts/seed.js",
     "migrate": "node src/scripts/migrate.js",
     "test": "node tests/run-all-tests.js",
+    "test:audit": "node tests/api-audit-all.js",
     "test:core": "node tests/run-tests.js",
     "test:unit": "node tests/unit/services.test.js",
     "test:api": "node tests/integration/api.test.js",
