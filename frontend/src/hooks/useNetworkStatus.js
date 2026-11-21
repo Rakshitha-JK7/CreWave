@@ -49,7 +49,7 @@ export function useNetworkStatus() {
 
     const start = Date.now();
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://10.110.18.46:5000/api';
       // Use short timeout for responsive ping
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);

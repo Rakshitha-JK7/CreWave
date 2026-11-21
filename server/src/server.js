@@ -7,7 +7,7 @@ async function startServer() {
     // Initialize database tables and connection
     await db.init();
 
-    const server = app.listen(config.port, () => {
+    const server = app.listen(config.port, '0.0.0.0', () => {
       console.log('================================================================');
       console.log('   CareWave Telemedicine Backend - Server Running');
       console.log('================================================================');
