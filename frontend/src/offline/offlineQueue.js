@@ -78,20 +78,22 @@ export async function enqueueConsultation(consultationId, options = {}) {
     const attachmentFiles = rawAttachments
       .map((att) => {
         if (att.file instanceof Blob || att.file instanceof File) {
+          const aName = String(att.name || att.file?.name || 'attachment');
           return {
             file: att.file,
-            name: att.name || att.file.name,
-            type: att.name?.toLowerCase().includes('ecg') ? 'ecg' : 'document',
-            priority: att.name?.toLowerCase().includes('ecg')
+            name: aName,
+            type: aName.toLowerCase().includes('ecg') ? 'ecg' : 'document',
+            priority: aName.toLowerCase().includes('ecg')
               ? ComponentPriority.GROUP_2_CLINICAL
               : ComponentPriority.GROUP_3_DOCUMENTS,
           };
         } else if (att instanceof Blob || att instanceof File) {
+          const aName = String(att.name || 'attachment');
           return {
             file: att,
-            name: att.name,
-            type: att.name?.toLowerCase().includes('ecg') ? 'ecg' : 'document',
-            priority: att.name?.toLowerCase().includes('ecg')
+            name: aName,
+            type: aName.toLowerCase().includes('ecg') ? 'ecg' : 'document',
+            priority: aName.toLowerCase().includes('ecg')
               ? ComponentPriority.GROUP_2_CLINICAL
               : ComponentPriority.GROUP_3_DOCUMENTS,
           };

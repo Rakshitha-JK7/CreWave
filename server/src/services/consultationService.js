@@ -237,6 +237,7 @@ class ConsultationService {
     // Attachments
     const attachments = await db.all(
       `SELECT id, component_id as "componentId", type, priority, file_name as "fileName",
+              file_name as "name", file_name as "file_name",
               file_size as "fileSize", mime_type as "mimeType", checksum,
               checksum_algorithm as "checksumAlgorithm", upload_status as "uploadStatus",
               storage_path as "storagePath", capture_date as "captureDate", created_at as "createdAt"
@@ -318,6 +319,8 @@ class ConsultationService {
       },
       attachments: attachments.map(a => ({
         ...a,
+        name: a.name || a.fileName,
+        fileName: a.fileName || a.name,
         url: a.uploadStatus === 'completed' ? `/api/medical-records/attachments/${a.id}/original` : null,
         originalUrl: `/api/medical-records/attachments/${a.id}/original`,
         isCompleted: a.uploadStatus === 'completed',

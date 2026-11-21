@@ -33,10 +33,11 @@ export default function ReviewedCases() {
 
   const filtered = consultations.filter((c) => {
     const q = searchQuery.toLowerCase();
+    const complaint = c.mainComplaint || c.clinicalSummary?.mainComplaint || (typeof c.symptoms === 'object' ? c.symptoms?.chiefComplaint : c.symptoms) || '';
     return (
-      c.id?.toLowerCase().includes(q) ||
-      c.patientName?.toLowerCase().includes(q) ||
-      c.symptoms?.chiefComplaint?.toLowerCase().includes(q)
+      (c.id && c.id.toLowerCase().includes(q)) ||
+      (c.patientName && c.patientName.toLowerCase().includes(q)) ||
+      complaint.toLowerCase().includes(q)
     );
   });
 

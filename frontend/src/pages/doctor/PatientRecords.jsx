@@ -92,8 +92,15 @@ export default function DoctorPatientRecords() {
                 </tr>
               </thead>
               <tbody>
-                {filteredPatients.map((patient) => (
-                  <tr key={patient.id}>
+                {filteredPatients.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px 16px', color: '#64748b' }}>
+                      {searchQuery ? 'No patients matching the search criteria.' : 'No patients found in the clinical directory.'}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPatients.map((patient) => (
+                    <tr key={patient.id}>
                     <td style={{ fontWeight: 600, color: '#0284c7' }}>{patient.id}</td>
                     <td>
                       <div style={{ fontWeight: 600, color: '#0f172a' }}>{patient.name}</div>
@@ -128,7 +135,7 @@ export default function DoctorPatientRecords() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>

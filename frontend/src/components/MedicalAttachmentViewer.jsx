@@ -19,9 +19,9 @@ export default function MedicalAttachmentViewer({ attachment, onClose }) {
 
   if (!attachment) return null;
 
-  const fileName = attachment.name || attachment.fileName || 'Attachment';
-  const ext = fileName.split('.').pop().toLowerCase();
-  const isImage = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff'].includes(ext) || attachment.type === 'clinical_image' || attachment.type === 'image';
+  const fileName = String(attachment.name || attachment.fileName || attachment.file_name || 'Attachment');
+  const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+  const isImage = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff'].includes(ext) || attachment.type === 'clinical_image' || attachment.type === 'image' || (typeof attachment.mimeType === 'string' && attachment.mimeType.startsWith('image/'));
   const isPdf = ext === 'pdf';
   const isDoc = ['doc', 'docx', 'txt'].includes(ext);
 

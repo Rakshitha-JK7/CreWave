@@ -85,12 +85,16 @@ export const consultationService = {
       try {
         const local = await dbGetAllConsultations();
         const serverIds = new Set(serverList.map((c) => c.id));
-        if (serverList.length === 0) {
-          // Database was cleared or is empty: clear all non-draft local consultations!
+        if (serverList.length === 0 && (!params.status || params.status === 'all')) {
+          // Database was cleared or is empty: clear all local caches so frontend strictly matches DB!
           await dbClearConsultations();
+          try {
+            localStorage.removeItem('carewave_consultations');
+            localStorage.removeItem('carewave_drafts');
+          } catch (e) {}
         } else {
           for (const item of (local || [])) {
-            if (!item.isDraft && item.status !== 'draft' && !serverIds.has(item.id)) {
+            if (!serverIds.has(item.id)) {
               await dbDeleteConsultation(item.id);
             }
           }

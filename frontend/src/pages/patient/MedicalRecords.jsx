@@ -34,29 +34,29 @@ export default function MedicalRecords() {
     return () => { mounted = false; };
   }, [patientId, patientName]);
 
-  const myConsultations = consultations;
+  const myConsultations = Array.isArray(consultations) ? consultations : [];
 
   // Aggregate vitals across consultations
   const vitalsHistory = myConsultations.map((c) => ({
-    date: c.createdAt,
-    clinic: c.clinicName || 'Rampur Primary Health Center',
-    caseId: c.id,
-    bp: c.vitals?.bloodPressure?.systolic && c.vitals?.bloodPressure?.diastolic
+    date: c?.createdAt,
+    clinic: c?.clinicName || 'Rampur Primary Health Center',
+    caseId: c?.id,
+    bp: c?.vitals?.bloodPressure?.systolic && c?.vitals?.bloodPressure?.diastolic
       ? `${c.vitals.bloodPressure.systolic}/${c.vitals.bloodPressure.diastolic} mmHg`
-      : (typeof c.vitals?.bloodPressure === 'string' ? `${c.vitals.bloodPressure} mmHg` : (c.vitals?.bpSystolic ? `${c.vitals.bpSystolic}/${c.vitals.bpDiastolic} mmHg` : 'Not Measured')),
-    hr: c.vitals?.heartRate ? `${typeof c.vitals.heartRate === 'object' ? c.vitals.heartRate.value : c.vitals.heartRate} bpm` : 'Not Measured',
-    temp: c.vitals?.temperature ? `${typeof c.vitals.temperature === 'object' ? c.vitals.temperature.value : c.vitals.temperature} °C` : 'Not Measured',
-    spo2: c.vitals?.spo2 ? `${typeof c.vitals.spo2 === 'object' ? c.vitals.spo2.value : c.vitals.spo2} %` : 'Not Measured',
-    rr: c.vitals?.respiratoryRate ? `${typeof c.vitals.respiratoryRate === 'object' ? c.vitals.respiratoryRate.value : c.vitals.respiratoryRate} /min` : 'Not Measured',
-    bg: c.vitals?.bloodGlucose ? `${typeof c.vitals.bloodGlucose === 'object' ? c.vitals.bloodGlucose.value : c.vitals.bloodGlucose} mg/dL` : 'Not Measured',
+      : (typeof c?.vitals?.bloodPressure === 'string' ? `${c.vitals.bloodPressure} mmHg` : (c?.vitals?.bpSystolic ? `${c.vitals.bpSystolic}/${c.vitals.bpDiastolic} mmHg` : 'Not Measured')),
+    hr: c?.vitals?.heartRate ? `${typeof c.vitals.heartRate === 'object' ? c.vitals.heartRate.value : c.vitals.heartRate} bpm` : 'Not Measured',
+    temp: c?.vitals?.temperature ? `${typeof c.vitals.temperature === 'object' ? c.vitals.temperature.value : c.vitals.temperature} °C` : 'Not Measured',
+    spo2: c?.vitals?.spo2 ? `${typeof c.vitals.spo2 === 'object' ? c.vitals.spo2.value : c.vitals.spo2} %` : 'Not Measured',
+    rr: c?.vitals?.respiratoryRate ? `${typeof c.vitals.respiratoryRate === 'object' ? c.vitals.respiratoryRate.value : c.vitals.respiratoryRate} /min` : 'Not Measured',
+    bg: c?.vitals?.bloodGlucose ? `${typeof c.vitals.bloodGlucose === 'object' ? c.vitals.bloodGlucose.value : c.vitals.bloodGlucose} mg/dL` : 'Not Measured',
   }));
 
   // Attachments
   const allAttachments = myConsultations.flatMap((c) =>
-    (c.attachments || []).map((att) => ({
+    (c?.attachments || []).map((att) => ({
       ...att,
-      consultationId: c.id,
-      date: c.createdAt,
+      consultationId: c?.id,
+      date: c?.createdAt,
     }))
   );
 
@@ -165,13 +165,14 @@ export default function MedicalRecords() {
                         Case #{att.consultationId} • {formatDate(att.date)}
                       </div>
                     </div>
-                    <button
+                    <a
                       className="btn btn-secondary btn-sm"
-                      onClick={() => alert(`Attachment "${att.name || 'document'}" download simulated.`)}
+                      href={att.originalUrl || att.url || `/api/medical-records/attachments/${att.id}/original`}
+                      download={att.name || att.fileName || 'medical_attachment'}
                       title="Download file"
                     >
                       <Download size={14} />
-                    </button>
+                    </a>
                   </div>
                 ))}
               </div>

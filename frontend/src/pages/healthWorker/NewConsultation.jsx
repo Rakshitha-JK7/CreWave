@@ -1338,11 +1338,13 @@ export default function NewConsultation() {
                   {formData.attachments.map(att => (
                     <div key={att.localId} style={styles.fileItem}>
                       <div style={styles.fileItemIcon}>
-                        {att.type.startsWith('image/') ? <ImageIcon size={18} color="#2563eb" /> : <File size={18} color="#64748b" />}
+                        {typeof att?.type === 'string' && att.type.startsWith('image/') ? <ImageIcon size={18} color="#2563eb" /> : <File size={18} color="#64748b" />}
                       </div>
                       <div style={styles.fileItemInfo}>
-                        <span style={styles.fileName} title={att.name}>{att.name.length > 40 ? att.name.slice(0, 37) + '…' : att.name}</span>
-                        <span style={styles.fileSize}>{formatFileSize(att.size)}</span>
+                        <span style={styles.fileName} title={att?.name || 'File'}>
+                          {att?.name ? (att.name.length > 40 ? att.name.slice(0, 37) + '…' : att.name) : (att?.fileName || 'Attachment')}
+                        </span>
+                        <span style={styles.fileSize}>{formatFileSize(att?.size || 0)}</span>
                       </div>
                       <button type="button" onClick={() => removeAttachment(att.localId)} style={styles.fileRemove}>
                         <X size={14} />

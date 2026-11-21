@@ -436,7 +436,7 @@ export default function CareBridgeTestingDashboard() {
   return (
     <DashboardLayout>
       <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60 }}>
-        
+
         {/* HEADER & SYNTHETIC DISCLAIMER BANNER */}
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -514,7 +514,7 @@ export default function CareBridgeTestingDashboard() {
 
         {/* GRID SECTION: NETWORK PROFILING & PING */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, marginBottom: 24 }}>
-          
+
           {/* Card 1: Network Latency & Physical Link */}
           <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -883,7 +883,7 @@ export default function CareBridgeTestingDashboard() {
           {aiTestResult && (
             <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, alignItems: 'center' }}>
-                
+
                 {/* Original Preview */}
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 8 }}>

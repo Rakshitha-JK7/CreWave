@@ -701,10 +701,11 @@ export default function ConsultationDetails() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {consultation.attachments.map((att) => {
-                    const fileName = att.name || att.fileName || '';
-                    const isImg = att.type === 'image' || fileName.toLowerCase().endsWith('.jpg') || fileName.toLowerCase().endsWith('.png');
-                    const isUploaded = att.status === 'uploaded';
+                  {(consultation.attachments || []).map((att) => {
+                    const fileName = String(att?.name || att?.fileName || att?.file_name || '');
+                    const lowerName = fileName.toLowerCase();
+                    const isImg = att?.type === 'image' || att?.type === 'clinical_image' || (typeof att?.mimeType === 'string' && att.mimeType.startsWith('image/')) || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.png') || lowerName.endsWith('.webp');
+                    const isUploaded = att?.status === 'uploaded' || att?.uploadStatus === 'completed';
 
                     return (
                       <div
