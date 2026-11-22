@@ -162,7 +162,32 @@ export default function PatientRecords() {
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                           <button
                             className="btn btn-secondary btn-sm"
-                            onClick={() => setSelectedPatient(patient)}
+                            onClick={async () => {
+                              setSelectedPatient(patient);
+                              try {
+                                const fullPt = await patientService.getPatientById(patient.id || patient.internalId);
+                                if (fullPt?.consultations?.length > 0) {
+                                  setConsultations((prev) => {
+                                    const map = new Map(prev.map((c) => [c.id, c]));
+                                    for (const c of fullPt.consultations) {
+                                      const existing = map.get(c.id);
+                                      if (!existing || !(existing.attachments?.length)) {
+                                        map.set(c.id, {
+                                          ...c,
+                                          patientId: fullPt.id,
+                                          patientReferenceId: fullPt.referenceId,
+                                          patientInternalId: fullPt.internalId,
+                                          patientName: fullPt.name,
+                                        });
+                                      }
+                                    }
+                                    return Array.from(map.values());
+                                  });
+                                }
+                              } catch (e) {
+                                // ignore
+                              }
+                            }}
                             title="View Profile Details"
                           >
                             <Eye size={14} /> Profile
@@ -277,7 +302,7 @@ export default function PatientRecords() {
                           (pId && (c.patientId === pId || c.patientReferenceId === pId || c.patientInternalId === pId)) ||
                           (pRef && (c.patientId === pRef || c.patientReferenceId === pRef || c.patientInternalId === pRef)) ||
                           (pInt && (c.patientId === pInt || c.patientReferenceId === pInt || c.patientInternalId === pInt)) ||
-                          (c.patient && (c.patient.id === pId || c.patient.referenceId === pRef || c.patient.id === pRef || c.patient.referenceId === pId)) ||
+                          (c.patient && (c.patient.id === pId || c.patient.referenceId === pRef || c.patient.id === pRef || c.patient.referenceId === pId || c.patient.id === pInt || c.patient.referenceId === pInt)) ||
                           (pName && c.patientName && c.patientName.trim().toLowerCase() === pName)
                         );
                       });

@@ -129,7 +129,8 @@ class PatientService {
                       sex, village, contact_number as "contactNumber", consent,
                       blood_group as "bloodGroup", emergency_contact as "emergencyContact",
                       medical_history as "medicalHistory", allergies,
-                      created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt"
+                      created_by as "createdBy", created_at as "createdAt", updated_at as "updatedAt",
+                      (SELECT COUNT(*) FROM consultations c WHERE c.patient_id = patients.id OR c.patient_id = patients.reference_id) as "consultationCount"
                FROM patients WHERE 1=1`;
     const params = [];
 
@@ -160,6 +161,7 @@ class PatientService {
         ...p,
         id: p.referenceId || p.id,
         internalId: p.id,
+        consultationCount: parseInt(p.consultationCount || 0, 10),
         phone: p.contactNumber,
         bloodGroup: p.bloodGroup || 'Unknown',
         conditions,
@@ -191,15 +193,52 @@ class PatientService {
       throw err;
     }
 
-    // Fetch consultations for this patient
+    // Fetch consultations for this patient (match both internal UUID and human reference ID)
     const consultations = await db.all(
       `SELECT id, priority, status, sync_status as "syncStatus", main_complaint as "mainComplaint",
+              symptoms, vitals, specialization, doctor_id as "doctorId", doctor_name as "doctorName",
               urgency_category as "urgencyCategory", consultation_date as "consultationDate", created_at as "createdAt"
        FROM consultations
-       WHERE patient_id = ?
+       WHERE patient_id = ? OR patient_id = ?
        ORDER BY consultation_date DESC`,
-      [patient.id]
+      [patient.id, patient.referenceId || patient.id]
     );
+
+    const consultationIds = (consultations || []).map(c => c.id);
+    let attachmentsByConsultation = {};
+    if (consultationIds.length > 0) {
+      const placeholders = consultationIds.map(() => '?').join(',');
+      const allAtts = await db.all(
+        `SELECT id, consultation_id as "consultationId", component_id as "componentId", type, priority,
+                file_name as "fileName", file_name as "name", file_name as "file_name",
+                file_size as "fileSize", mime_type as "mimeType", checksum,
+                checksum_algorithm as "checksumAlgorithm", upload_status as "uploadStatus",
+                storage_path as "storagePath", capture_date as "captureDate", created_at as "createdAt"
+         FROM attachments
+         WHERE consultation_id IN (${placeholders})
+         ORDER BY priority ASC, created_at ASC`,
+        consultationIds
+      );
+      for (const a of (allAtts || [])) {
+        if (!attachmentsByConsultation[a.consultationId]) attachmentsByConsultation[a.consultationId] = [];
+        attachmentsByConsultation[a.consultationId].push({
+          ...a,
+          url: `/api/medical-records/attachments/${a.id}/original`,
+          originalUrl: `/api/medical-records/attachments/${a.id}/original`,
+          enhancedUrl: `/api/medical-records/attachments/${a.id}/enhanced`,
+          isCompleted: a.uploadStatus === 'completed',
+        });
+      }
+    }
+
+    const populatedConsultations = (consultations || []).map(c => ({
+      ...c,
+      patientId: patient.referenceId || patient.id,
+      patientReferenceId: patient.referenceId,
+      patientInternalId: patient.id,
+      patientName: patient.name,
+      attachments: attachmentsByConsultation[c.id] || [],
+    }));
 
     let conditions = [];
     if (patient.medicalHistory) {
@@ -219,7 +258,7 @@ class PatientService {
       conditions,
       allergies: parsedAllergies,
       consent: Boolean(patient.consent),
-      consultations: consultations || [],
+      consultations: populatedConsultations,
     };
   }
 }

@@ -4,6 +4,7 @@ import { Search, Eye, MapPin, X } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import patientService from '../../services/patientService';
 import consultationService from '../../services/consultationService';
+import doctorService from '../../services/doctorService';
 import { formatDate } from '../../utils/formatDate';
 
 export default function DoctorPatientRecords() {
@@ -18,13 +19,24 @@ export default function DoctorPatientRecords() {
     let mounted = true;
     async function fetchData() {
       try {
-        const [pts, cons] = await Promise.all([
+        const [pts, cons, docCons] = await Promise.all([
           patientService.getPatients().catch(() => []),
           consultationService.getConsultations().catch(() => []),
+          doctorService.getDoctorConsultations().catch(() => []),
         ]);
         if (mounted) {
           if (Array.isArray(pts)) setPatients(pts);
-          if (Array.isArray(cons)) setConsultations(cons);
+          const map = new Map();
+          for (const c of (Array.isArray(cons) ? cons : [])) {
+            if (c?.id) map.set(c.id, c);
+          }
+          for (const c of (Array.isArray(docCons) ? docCons : [])) {
+            if (c?.id) {
+              const existing = map.get(c.id) || {};
+              map.set(c.id, { ...existing, ...c });
+            }
+          }
+          setConsultations(Array.from(map.values()));
         }
       } catch (err) {
         console.warn('Failed to load doctor patient records:', err);
@@ -123,12 +135,52 @@ export default function DoctorPatientRecords() {
                         )}
                       </div>
                     </td>
-                    <td>{patient.consultationCount || 1} visits</td>
+                    <td>
+                      {(() => {
+                        const pId = patient.id;
+                        const pRef = patient.referenceId;
+                        const pInt = patient.internalId;
+                        const pName = patient.name?.trim().toLowerCase();
+                        const count = consultations.filter((c) => (
+                          (pId && (c.patientId === pId || c.patientReferenceId === pId || c.patientInternalId === pId)) ||
+                          (pRef && (c.patientId === pRef || c.patientReferenceId === pRef || c.patientInternalId === pRef)) ||
+                          (pInt && (c.patientId === pInt || c.patientReferenceId === pInt || c.patientInternalId === pInt)) ||
+                          (c.patient && (c.patient.id === pId || c.patient.referenceId === pRef || c.patient.id === pRef || c.patient.referenceId === pId || c.patient.id === pInt || c.patient.referenceId === pInt)) ||
+                          (pName && c.patientName && c.patientName.trim().toLowerCase() === pName)
+                        )).length;
+                        return `${count || patient.consultationCount || 0} visits`;
+                      })()}
+                    </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                         <button
                           className="btn btn-secondary btn-sm"
-                          onClick={() => setSelectedPatient(patient)}
+                          onClick={async () => {
+                            setSelectedPatient(patient);
+                            try {
+                              const fullPt = await patientService.getPatientById(patient.id || patient.internalId);
+                              if (fullPt?.consultations?.length > 0) {
+                                setConsultations((prev) => {
+                                  const map = new Map(prev.map((c) => [c.id, c]));
+                                  for (const c of fullPt.consultations) {
+                                    const existing = map.get(c.id);
+                                    if (!existing || !(existing.attachments?.length)) {
+                                      map.set(c.id, {
+                                        ...c,
+                                        patientId: fullPt.id,
+                                        patientReferenceId: fullPt.referenceId,
+                                        patientInternalId: fullPt.internalId,
+                                        patientName: fullPt.name,
+                                      });
+                                    }
+                                  }
+                                  return Array.from(map.values());
+                                });
+                              }
+                            } catch (e) {
+                              // ignore
+                            }
+                          }}
                         >
                           <Eye size={14} /> Full History
                         </button>
@@ -207,7 +259,7 @@ export default function DoctorPatientRecords() {
                           (pId && (c.patientId === pId || c.patientReferenceId === pId || c.patientInternalId === pId)) ||
                           (pRef && (c.patientId === pRef || c.patientReferenceId === pRef || c.patientInternalId === pRef)) ||
                           (pInt && (c.patientId === pInt || c.patientReferenceId === pInt || c.patientInternalId === pInt)) ||
-                          (c.patient && (c.patient.id === pId || c.patient.referenceId === pRef || c.patient.id === pRef || c.patient.referenceId === pId)) ||
+                          (c.patient && (c.patient.id === pId || c.patient.referenceId === pRef || c.patient.id === pRef || c.patient.referenceId === pId || c.patient.id === pInt || c.patient.referenceId === pInt)) ||
                           (pName && c.patientName && c.patientName.trim().toLowerCase() === pName)
                         );
                       });

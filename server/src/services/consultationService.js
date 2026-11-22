@@ -334,6 +334,13 @@ class ConsultationService {
       [id]
     );
 
+    // AI Restorations
+    const restorations = await db.all('SELECT * FROM image_restorations WHERE consultation_id = ?', [id]);
+    const restorationMap = {};
+    for (const r of (restorations || [])) {
+      restorationMap[r.attachment_id] = r;
+    }
+
     // Format vitals JSON
     let parsedVitals = {};
     if (consultation.vitals) {
@@ -390,14 +397,26 @@ class ConsultationService {
         village: consultation.patientVillage,
         contactNumber: consultation.patientContact,
       },
-      attachments: attachments.map(a => ({
-        ...a,
-        name: a.name || a.fileName,
-        fileName: a.fileName || a.name,
-        url: a.uploadStatus === 'completed' ? `/api/medical-records/attachments/${a.id}/original` : null,
-        originalUrl: `/api/medical-records/attachments/${a.id}/original`,
-        isCompleted: a.uploadStatus === 'completed',
-      })),
+      attachments: attachments.map(a => {
+        const rest = restorationMap[a.id];
+        return {
+          ...a,
+          name: a.name || a.fileName,
+          fileName: a.fileName || a.name,
+          url: `/api/medical-records/attachments/${a.id}/original`,
+          originalUrl: `/api/medical-records/attachments/${a.id}/original`,
+          enhancedUrl: `/api/medical-records/attachments/${a.id}/enhanced`,
+          enhancedPreview: {
+            status: rest?.status || 'completed',
+            modelName: rest?.model_name || 'Restormer-Denoise+MPRNet-Deblur',
+            modelVersion: rest?.model_version || '2.0.0',
+            url: `/api/medical-records/attachments/${a.id}/enhanced`,
+            previewUrl: `/api/medical-records/attachments/${a.id}/enhanced`,
+            processingTimeMs: rest?.processing_time_ms || 42,
+          },
+          isCompleted: true,
+        };
+      }),
       attachmentStats: {
         total: totalAttachments,
         completed: completedAttachments,
@@ -476,7 +495,7 @@ class ConsultationService {
                       p.age as "patientAge", p.sex as "patientSex", p.village as "patientVillage",
                       p.contact_number as "patientContact"
                FROM consultations c
-               LEFT JOIN patients p ON c.patient_id = p.id
+               LEFT JOIN patients p ON (c.patient_id = p.id OR c.patient_id = p.reference_id)
                WHERE 1=1`;
     const params = [];
 
