@@ -8,7 +8,7 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 router.get('/consultations', authenticateToken, requireRole('doctor', 'admin'), consultationsController.getDoctorQueue);
 
 // Doctor views specific consultation detail
-router.get('/consultations/:id', authenticateToken, requireRole('doctor', 'admin'), consultationsController.getById);
+router.get('/consultations/:id', authenticateToken, requireRole('doctor', 'health_worker', 'admin'), consultationsController.getById);
 
 // Doctor updates review status
 router.patch('/consultations/:id/review', authenticateToken, requireRole('doctor', 'admin'), consultationsController.updateReview);

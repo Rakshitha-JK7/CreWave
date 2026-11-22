@@ -203,7 +203,7 @@ export default function App() {
           <Route
             path="/doctor/consultation/:id"
             element={
-              <ProtectedRoute allowedRoles={['doctor']}>
+              <ProtectedRoute allowedRoles={['doctor', 'health_worker', 'admin']}>
                 <ConsultationDetails />
               </ProtectedRoute>
             }

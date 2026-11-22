@@ -23,6 +23,14 @@ export const doctorService = {
       const response = await api.get(`/doctor/consultations/${id}`);
       return response.data?.data || response.data;
     } catch (err) {
+      try {
+        const fallback = await api.get(`/consultations/${id}`);
+        if (fallback.data?.data || fallback.data) {
+          return fallback.data?.data || fallback.data;
+        }
+      } catch (fallbackErr) {
+        // ignore fallback error
+      }
       const local = await dbGetConsultation(id);
       return local || null;
     }
