@@ -129,7 +129,7 @@ export default function ConsultationDetails() {
     );
   }
 
-  const patientObj = patientInfo || patient || consultation.patient || {};
+  const patientObj = patient || consultation.patient || {};
   const vitals = consultation.vitals || {};
   const progress =
     consultation.transferProgress ||
